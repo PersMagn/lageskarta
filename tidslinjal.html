@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Tidslinjal - Fiende</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            color: #000;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-buttons a {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .nav-buttons a:hover {
+            background: #0056b3;
+        }
+
+        .controls {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #555;
+        }
+
+        select, input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn-apply {
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            align-self: flex-end;
+        }
+
+        .btn-apply:hover {
+            background: #218838;
+        }
+
+        .timeline-wrapper {
+            display: block;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 800px;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .time-axis {
+            position: sticky;
+            top: 0;
+            height: 60px;
+            background: white;
+            border-bottom: 3px solid #000;
+            padding: 0 10px;
+            z-index: 10;
+        }
+
+        .time-mark {
+            position: absolute;
+            font-size: 13px;
+            font-weight: bold;
+            white-space: nowrap;
+            padding: 0 15px;
+            padding-bottom: 10px;
+            border-right: 1px solid #ddd;
+            min-width: 80px;
+            text-align: center;
+            bottom: 0;
+        }
+
+        .events-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 10px 0;
+        }
+
+        .time-row {
+            position: relative;
+            display: flex;
+            gap: 0;
+            height: auto;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            align-items: flex-start;
+        }
+
+        .time-row.active {
+            background: #f9f9f9;
+        }
+
+        .event-box {
+            position: absolute;
+            padding: 10px;
+            border-left: 4px solid;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 150px;
+            max-width: 250px;
+            word-wrap: break-word;
+            line-height: 1.4;
+            top: 8px;
+        }
+        .event-box.stridsgrupperat { background: #A52A2A; border-left-color: #8B2121; color: white; }
+        .event-box.frr-tp { background: #FFFFFF; border-left-color: #CCCCCC; color: #000; }
+        .event-box.ll-fällning { background: #FFA500; border-left-color: #FF8C00; color: #000; }
+        .event-box.grp-grupperad { background: #228B22; border-left-color: #1B6B1B; color: white; }
+        .event-box.särskild-händelse { background: #800080; border-left-color: #660066; color: white; }
+        .event-box.övrigt { background: #8B4513; border-left-color: #704010; color: white; }
+
+        /* Fallback color palette for generic use */
+        .event-box.color0 { background: #FFE082; border-left-color: #F57C00; color: #E65100; }
+        .event-box.color1 { background: #90EE90; border-left-color: #2E7D32; color: #1B5E20; }
+        .event-box.color2 { background: #B3E5FC; border-left-color: #0277BD; color: #01579B; }
+        .event-box.color3 { background: #F8BBD0; border-left-color: #C2185B; color: #880E4F; }
+        .event-box.color4 { background: #E1BEE7; border-left-color: #6A1B9A; color: #4A148C; }
+        .event-box.color5 { background: #FFE0B2; border-left-color: #E65100; color: #BF360C; }
+        .event-box.color6 { background: #C8E6C9; border-left-color: #1B5E20; color: #003300; }
+        .event-box.color7 { background: #BBDEFB; border-left-color: #1565C0; color: #0D47A1; }
+        .event-box.color8 { background: #FFCCBC; border-left-color: #D84315; color: #BF360C; }
+        .event-box.color9 { background: #D1C4E9; border-left-color: #512DA8; color: #311B92; }
+
+        .event-tnr {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        .event-id {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .event-info {
+            margin-bottom: 4px;
+            font-size: 12px;
+            line-height: 1.3;
+        }
+
+        .event-meta {
+            font-size: 11px;
+            opacity: 0.85;
+            line-height: 1.2;
+        }
+
+        .event-plats {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .time-gap {
+            position: absolute;
+            width: 100%;
+            background: linear-gradient(to bottom, transparent, rgba(200,200,200,0.1), transparent);
+            border-left: 2px dashed #ccc;
+            margin-left: 2px;
+        }
+
+        .time-gap-label {
+            position: absolute;
+            left: 10px;
+            font-size: 11px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .legend {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-box {
+            width: 20px;
+            height: 20px;
+            border-left: 4px solid;
+            background: #eee;
+        }
+
+        .legend-box.enemy {
+            background: #ffcccc;
+            border-left-color: #cc0000;
+        }
+
+        .legend-box.own {
+            background: #cce5ff;
+            border-left-color: #0066ff;
+        }
+
+        .legend-box.unknown {
+            background: #e8e8e8;
+            border-left-color: #666;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border: 1px solid #2196F3;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            color: #999;
+            font-size: 16px;
+        }
+
+        .time-range-slider {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            grid-column: 1 / -1;
+        }
+
+        .time-range-slider > label {
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #555;
+        }
+
+        .slider-wrapper {
+            position: relative;
+            height: 30px;
+            display: flex;
+            align-items: center;
+        }
+
+        .slider-track-bg {
+            position: absolute;
+            width: 100%;
+            height: 8px;
+            background: #ddd;
+            border-radius: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .slider-track-active {
+            position: absolute;
+            height: 8px;
+            background: #007bff;
+            border-radius: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            pointer-events: all;
+            cursor: grab;
+        }
+
+        .time-slider {
+            position: absolute;
+            width: 100%;
+            height: 30px;
+            top: 0;
+            left: 0;
+            background: none;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .time-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            pointer-events: all;
+            border: 2px solid white;
+        }
+
+        .time-slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            pointer-events: all;
+        }
+
+        .time-slider::-moz-range-track {
+            background: none;
+            border: none;
+        }
+
+        .slider-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        @media print {
+            .controls, .nav-buttons, .legend {
+                display: none;
+            }
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>⏱️ Operativ Tidslinjal (Tid-skalerad)</h1>
+    <div class="nav-buttons">
+        <a href="map.html">🗺️ Kartvy</a>
+        <a href="index.html">← Tillbaka</a>
+    </div>
+</div>
+
+<div class="info-box">
+    <strong>Tid-skalerad tidslinjal:</strong> Händelser positioneras enligt faktisk tid (TNR). Tidsavstånd är visuellt representerat.
+    Flera händelser på samma tid stackas tillsammans. Sortering möjlig på alla fält.
+</div>
+
+<div class="controls">
+    <div class="control-group">
+        <label>Sortera efter fält</label>
+        <select id="sortField">
+            <option value="tnr">TNR (Tid)</option>
+            <option value="mtrl">Materiel</option>
+            <option value="org">Organisation</option>
+            <option value="från">Från</option>
+            <option value="sakriktighet">Sakriktighet</option>
+            <option value="tillförlitlighet">Tillförlitlighet</option>
+            <option value="lopnummer">Løpnummer</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>Färgkod efter</label>
+        <select id="colorBy">
+            <option value="från">Händelsetyp (FM-standard)</option>
+            <option value="org">Organisation/Förband</option>
+            <option value="mtrl">Materiel</option>
+            <option value="sakriktighet">Sakriktighet</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>Filtrera på Sakriktighet</label>
+        <select id="filterAccuracy">
+            <option value="">Alla</option>
+            <option value="1">1 - Höga</option>
+            <option value="2">2 - Medel</option>
+            <option value="3">3 - Låga</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>Filtrera på Tillförlitlighet</label>
+        <select id="filterReliability">
+            <option value="">Alla</option>
+            <option value="A">A - Helt pålitlig</option>
+            <option value="B">B - Pålitlig</option>
+            <option value="C">C - Relativt pålitlig</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>Filtrera på Händelsetyp</label>
+        <select id="filterEventType">
+            <option value="">Alla</option>
+            <option value="stridsgrupperat">Stridsgrupperat</option>
+            <option value="frr-tp">FRR / TP</option>
+            <option value="ll-fällning">LL / Fällning</option>
+            <option value="grp-grupperad">GRP / Grupperad</option>
+            <option value="särskild-händelse">Särskild händelse</option>
+            <option value="övrigt">Övrigt</option>
+        </select>
+    </div>
+
+    <div class="time-range-slider">
+        <label>Tidsskala</label>
+        <div class="slider-wrapper">
+            <div class="slider-track-bg"></div>
+            <div class="slider-track-active" id="sliderTrackActive" style="left: 0%; right: 0%;"></div>
+            <input type="range" id="timeSliderStart" class="time-slider" min="0" max="1440" value="0">
+            <input type="range" id="timeSliderEnd" class="time-slider" min="0" max="1440" value="1440">
+        </div>
+        <div class="slider-display">
+            <span id="labelStart">--:--</span>
+            <span id="labelEnd">--:--</span>
+        </div>
+    </div>
+
+    <button class="btn-apply" onclick="applyFilters()">🔄 Uppdatera</button>
+</div>
+
+<div class="timeline-wrapper">
+    <div class="time-axis" id="timeAxis"></div>
+    <div class="events-container" id="eventsContainer">
+        <div class="empty-state">Laddar...</div>
+    </div>
+</div>
+
+<div class="legend">
+    <div style="flex: 1;">
+        <strong>Färgkod:</strong>
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;" id="legendColors"></div>
+    </div>
+</div>
+
+<script>
+    let allObservations = JSON.parse(sessionStorage.getItem('my_obs')) || [];
+    let filteredData = [];
+    let colorMap = {};
+    let colorIndex = 0;
+    let timeScaleMin = null;
+    let timeScaleMax = null;
+
+    // Parse TNR to minutes (handles both "HHMM" and "DDHHMM" formats)
+    function parseTNRtoMinutes(tnrStr) {
+        if (!tnrStr) return 0;
+        const cleaned = tnrStr.replace(/\s+/g, '');
+
+        let day = 0;
+        let hh = 0;
+        let mm = 0;
+
+        if (cleaned.length >= 6) {
+            // Format: DDHHMM
+            day = parseInt(cleaned.substring(0, 2)) || 0;
+            hh = parseInt(cleaned.substring(2, 4)) || 0;
+            mm = parseInt(cleaned.substring(4, 6)) || 0;
+        } else if (cleaned.length >= 4) {
+            // Format: HHMM
+            hh = parseInt(cleaned.substring(0, 2)) || 0;
+            mm = parseInt(cleaned.substring(2, 4)) || 0;
+        }
+
+        return (day * 24 * 60) + (hh * 60) + mm;
+    }
+
+    function formatTNR(tnrStr) {
+        if (!tnrStr) return '--:--';
+        const cleaned = tnrStr.replace(/\s+/g, '');
+
+        let day = 0;
+        let hh = 0;
+        let mm = 0;
+
+        if (cleaned.length >= 6) {
+            day = parseInt(cleaned.substring(0, 2)) || 0;
+            hh = parseInt(cleaned.substring(2, 4)) || 0;
+            mm = parseInt(cleaned.substring(4, 6)) || 0;
+            const dayStr = day > 0 ? `D${day}` : '';
+            return `${dayStr} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        } else if (cleaned.length >= 4) {
+            hh = parseInt(cleaned.substring(0, 2)) || 0;
+            mm = parseInt(cleaned.substring(2, 4)) || 0;
+            return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        }
+
+        return '--:--';
+    }
+
+    // Update legend
+    function updateLegend(colorBy) {
+        const legendDiv = document.getElementById('legendColors');
+
+        // Show Swedish military event types if coloring by event type
+        if (colorBy === 'från' || !colorBy) {
+            const eventTypes = [
+                { label: 'Stridsgrupperat', class: 'stridsgrupperat' },
+                { label: 'FRR / TP', class: 'frr-tp' },
+                { label: 'LL / Fällning', class: 'll-fällning' },
+                { label: 'GRP / Grupperad', class: 'grp-grupperad' },
+                { label: 'Särskild händelse', class: 'särskild-händelse' },
+                { label: 'Övrigt', class: 'övrigt' }
+            ];
+
+            let html = '';
+            eventTypes.forEach(type => {
+                html += `
+                    <div class="legend-item">
+                        <div class="legend-box ${type.class}"></div>
+                        <span>${type.label}</span>
+                    </div>
+                `;
+            });
+
+            legendDiv.innerHTML = html;
+            return;
+        }
+
+        // Show field-based coloring legend
+        const colorByLabel = {
+            'org': 'Organisation/Förband',
+            'mtrl': 'Materiel',
+            'sakriktighet': 'Sakriktighet'
+        };
+
+        let html = '';
+        const uniqueValues = {};
+
+        filteredData.forEach(obs => {
+            const value = obs[colorBy] || 'okänd';
+            uniqueValues[value] = true;
+        });
+
+        Object.keys(uniqueValues).sort().forEach(value => {
+            const colorClass = colorMap[value.toLowerCase()] || 'color0';
+            html += `
+                <div class="legend-item">
+                    <div class="legend-box ${colorClass}"></div>
+                    <span>${value}</span>
+                </div>
+            `;
+        });
+
+        legendDiv.innerHTML = html || '<span style="color: #999;">Ingen data</span>';
+    }
+
+    // Apply filters
+    function applyFilters() {
+        const accuracy = document.getElementById('filterAccuracy').value;
+        const reliability = document.getElementById('filterReliability').value;
+        const eventType = document.getElementById('filterEventType').value;
+        const sortField = document.getElementById('sortField').value;
+        const colorBy = document.getElementById('colorBy').value;
+
+        // Parse time scale from sliders
+        timeScaleMin = parseInt(document.getElementById('timeSliderStart').value);
+        timeScaleMax = parseInt(document.getElementById('timeSliderEnd').value);
+
+        // Reset color map for new color-by field
+        colorMap = {};
+        colorIndex = 0;
+
+        filteredData = allObservations.filter(obs => {
+            if (accuracy && obs.sakriktighet !== accuracy) return false;
+            if (reliability && obs.tillförlitlighet !== reliability) return false;
+            if (eventType && getEventTypeColor(obs.info) !== eventType) return false;
+            return true;
+        });
+
+        // Sort
+        if (sortField === 'tnr') {
+            filteredData.sort((a, b) => parseTNRtoMinutes(a.tnr) - parseTNRtoMinutes(b.tnr));
+        } else {
+            filteredData.sort((a, b) => {
+                const aVal = String(a[sortField] || '').toLowerCase();
+                const bVal = String(b[sortField] || '').toLowerCase();
+                return aVal.localeCompare(bVal);
+            });
+        }
+
+        renderTimeline(colorBy);
+    }
+
+    // Get color based on Swedish military event type
+    function getEventTypeColor(text) {
+        const t = String(text || '').toLowerCase();
+
+        if (t.includes('stridsgrupperat') || t.includes('nedkämpa') || t.includes('utslagna') || t.includes('utslagen') || t.includes('eldöverfall') ) return 'stridsgrupperat';
+        if (t.includes('frr') || t.includes('tp')) return 'frr-tp';
+        if (t.includes(' ll ') || t.includes('fälls') || t.includes('fällning')) return 'll-fällning';
+        if (t.includes('grp') || t.includes('grupperad')) return 'grp-grupperad';
+        if (t.includes('särskild') || t.includes('händelse')) return 'särskild-händelse';
+
+        return 'övrigt';
+    }
+
+    // Get color class for observation (prioritizes event type, falls back to field-based coloring)
+    function getColorClass(obs, colorByField) {
+        // Try to get color from event type first (from info field)
+        if (colorByField === 'från' || !colorByField) {
+            const eventTypeColor = getEventTypeColor(obs.info);
+            return eventTypeColor;
+        }
+
+        // Fall back to field-based coloring
+        if (!colorByField || colorByField === 'none') return 'övrigt';
+
+        const value = obs[colorByField] || 'okänd';
+        const key = String(value).toLowerCase();
+
+        if (!colorMap[key]) {
+            colorMap[key] = `color${colorIndex % 10}`;
+            colorIndex++;
+        }
+
+        return colorMap[key];
+    }
+
+    // Render timeline - horizontal layout
+    function renderTimeline(colorBy = 'org') {
+        const container = document.getElementById('eventsContainer');
+        const timeAxis = document.getElementById('timeAxis');
+        const wrapper = document.querySelector('.timeline-wrapper');
+
+        if (filteredData.length === 0) {
+            container.innerHTML = '<div class="empty-state">Inga observationer matchar filter</div>';
+            return;
+        }
+
+        // Group events by time
+        const timeGroups = {};
+        filteredData.forEach(obs => {
+            const minutes = parseTNRtoMinutes(obs.tnr);
+            let timeKey = minutes;
+
+            if (!timeGroups[timeKey]) {
+                timeGroups[timeKey] = [];
+            }
+            timeGroups[timeKey].push(obs);
+        });
+
+        const sortedTimes = Object.keys(timeGroups).map(Number).sort((a, b) => a - b);
+
+        // Find min and max time for scaling
+        let minTime = sortedTimes[0];
+        let maxTime = sortedTimes[sortedTimes.length - 1];
+
+        // Use time scale limits if set
+        if (timeScaleMin !== null) minTime = Math.max(minTime, timeScaleMin);
+        if (timeScaleMax !== null) maxTime = Math.min(maxTime, timeScaleMax);
+
+        const timeRange = maxTime - minTime || 60;
+
+        // Get actual viewport width from the wrapper container, accounting for padding and scrollbar
+        const wrapperWidth = wrapper.clientWidth;
+        const timelineWidth = Math.max(wrapperWidth - 40, 500); // Subtract padding (20px each side), minimum 500px
+        const pixelsPerMinute = timelineWidth / timeRange;
+        let timeAxisHTML = '';
+        const markInterval = timeRange > 480 ? 120 : 60; // 2 hours if range > 8 hours, else 1 hour
+
+        for (let t = minTime; t <= maxTime; t += markInterval) {
+            const days = Math.floor(t / (24 * 60));
+            const remainingMinutes = t % (24 * 60);
+            const hh = Math.floor(remainingMinutes / 60);
+            const mm = remainingMinutes % 60;
+            const dayStr = days > 0 ? `D${days} ` : '';
+            const timeStr = `${dayStr}${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+            const position = ((t - minTime) / timeRange) * timelineWidth;
+            timeAxisHTML += `<div class="time-mark" style="left: ${position}px; width: 80px;">${timeStr}</div>`;
+        }
+
+        timeAxis.innerHTML = timeAxisHTML;
+        timeAxis.style.width = `${timelineWidth}px`;
+
+        // Arrange events in lanes (rows) to avoid overlap
+        const lanes = [];
+        const eventLaneMap = {};
+        const eventBoxWidth = 200; // Estimated width of event box in pixels
+
+        sortedTimes.forEach(timeKey => {
+            const events = timeGroups[timeKey];
+
+            events.forEach((obs, idx) => {
+                // Skip events outside the visible time range
+                if (timeScaleMin !== null && parseTNRtoMinutes(obs.tnr) < timeScaleMin) return;
+                if (timeScaleMax !== null && parseTNRtoMinutes(obs.tnr) > timeScaleMax) return;
+
+                let laneFound = false;
+
+                // Try to find an existing lane where this event doesn't overlap
+                for (let laneIdx = 0; laneIdx < lanes.length; laneIdx++) {
+                    const lane = lanes[laneIdx];
+                    let canFit = true;
+
+                    // Check if event overlaps with any other event in this lane (considering visual width)
+                    for (let existingEvent of lane) {
+                        const existingStart = existingEvent.timeKey;
+                        const existingEnd = existingStart + (eventBoxWidth / pixelsPerMinute);
+                        const newStart = timeKey;
+                        const newEnd = newStart + (eventBoxWidth / pixelsPerMinute);
+
+                        // Check for overlap: new event should start after existing event ends
+                        if (newStart < existingEnd && newEnd > existingStart) {
+                            canFit = false;
+                            break;
+                        }
+                    }
+
+                    if (canFit) {
+                        lane.push({ ...obs, timeKey, laneIdx });
+                        eventLaneMap[`${timeKey}-${idx}`] = laneIdx;
+                        laneFound = true;
+                        break;
+                    }
+                }
+
+                // If no lane found, create new lane
+                if (!laneFound) {
+                    lanes.push([{ ...obs, timeKey, laneIdx: lanes.length }]);
+                    eventLaneMap[`${timeKey}-${idx}`] = lanes.length - 1;
+                }
+            });
+        });
+
+        // Render lanes
+        let eventsHTML = '';
+        lanes.forEach((lane, laneIdx) => {
+            eventsHTML += `<div class="time-row" style="min-height: 100px; width: ${timelineWidth}px; min-width: ${timelineWidth}px;">`;
+
+            lane.forEach(obs => {
+                const colorClass = getColorClass(obs, colorBy);
+                const position = ((parseTNRtoMinutes(obs.tnr) - minTime) / timeRange) * timelineWidth;
+
+                eventsHTML += `
+                    <div class="event-box ${colorClass}" style="left: ${position}px; top: 8px;">
+                        <div class="event-tnr">${formatTNR(obs.tnr)}</div>
+                        <div class="event-id">#${obs.lopnummer}</div>
+                        ${obs.pos ? `<div class="event-plats">${obs.pos}</div>` : ''}
+                        ${obs.mtrl ? `<div class="event-info"><strong>${obs.mtrl}</strong>${obs.org ? ' / ' + obs.org : ''}</div>` : ''}
+                        <div class="event-info">${obs.info}</div>
+                        <div class="event-meta">Säkerhet: ${obs.sakriktighet || '-'} | Tillf: ${obs.tillförlitlighet || '-'}</div>
+                    </div>
+                `;
+            });
+
+            eventsHTML += `</div>`;
+        });
+
+        // Set container width
+        container.style.width = `${timelineWidth}px`;
+        container.innerHTML = eventsHTML;
+
+        // Update legend
+        updateLegend(colorBy);
+    }
+
+    // Initialize time slider range from data
+    function initializeTimeInputs() {
+        let minTime = Infinity;
+        let maxTime = -Infinity;
+
+        allObservations.forEach(obs => {
+            const minutes = parseTNRtoMinutes(obs.tnr);
+            if (minutes > 0) {
+                minTime = Math.min(minTime, minutes);
+                maxTime = Math.max(maxTime, minutes);
+            }
+        });
+
+        if (minTime === Infinity) { minTime = 0; maxTime = 1440; }
+
+        const sliderStart = document.getElementById('timeSliderStart');
+        const sliderEnd = document.getElementById('timeSliderEnd');
+
+        sliderStart.min = minTime;
+        sliderStart.max = maxTime;
+        sliderStart.value = minTime;
+        sliderEnd.min = minTime;
+        sliderEnd.max = maxTime;
+        sliderEnd.value = maxTime;
+
+        timeScaleMin = minTime;
+        timeScaleMax = maxTime;
+
+        updateSliderDisplay();
+        applyFilters();
+    }
+
+    function updateSliderDisplay() {
+        const sliderStart = document.getElementById('timeSliderStart');
+        const sliderEnd = document.getElementById('timeSliderEnd');
+        const trackActive = document.getElementById('sliderTrackActive');
+
+        const min = parseInt(sliderStart.min) || 0;
+        const max = parseInt(sliderStart.max) || 1440;
+        const range = max - min || 1;
+
+        const startVal = parseInt(sliderStart.value);
+        const endVal = parseInt(sliderEnd.value);
+
+        const startPercent = ((startVal - min) / range) * 100;
+        const endPercent = ((endVal - min) / range) * 100;
+
+        trackActive.style.left = startPercent + '%';
+        trackActive.style.right = (100 - endPercent) + '%';
+
+        const fmt = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+        document.getElementById('labelStart').textContent = fmt(startVal);
+        document.getElementById('labelEnd').textContent = fmt(endVal);
+    }
+
+    document.getElementById('timeSliderStart').addEventListener('input', (e) => {
+        let v = parseInt(e.target.value);
+        const endVal = parseInt(document.getElementById('timeSliderEnd').value);
+        if (v > endVal) { v = endVal; e.target.value = v; }
+        timeScaleMin = v;
+        updateSliderDisplay();
+        applyFilters();
+    });
+
+    document.getElementById('timeSliderEnd').addEventListener('input', (e) => {
+        let v = parseInt(e.target.value);
+        const startVal = parseInt(document.getElementById('timeSliderStart').value);
+        if (v < startVal) { v = startVal; e.target.value = v; }
+        timeScaleMax = v;
+        updateSliderDisplay();
+        applyFilters();
+    });
+
+    // Drag active track to shift window
+    const sliderTrackActive = document.getElementById('sliderTrackActive');
+    const sliderWrapper = document.querySelector('.slider-wrapper');
+    let isDraggingTrack = false, dragStartX = 0, dragStartMin = 0, dragStartMax = 0;
+
+    sliderTrackActive.addEventListener('mousedown', (e) => {
+        isDraggingTrack = true;
+        dragStartX = e.clientX;
+        dragStartMin = timeScaleMin;
+        dragStartMax = timeScaleMax;
+        sliderTrackActive.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDraggingTrack) return;
+        const sliderStart = document.getElementById('timeSliderStart');
+        const sliderEnd = document.getElementById('timeSliderEnd');
+        const wrapperRect = sliderWrapper.getBoundingClientRect();
+        const min = parseInt(sliderStart.min), max = parseInt(sliderStart.max);
+        const range = max - min;
+        const delta = Math.round(((e.clientX - dragStartX) / wrapperRect.width) * range);
+        const dur = dragStartMax - dragStartMin;
+        let newStart = dragStartMin + delta;
+        let newEnd = dragStartMax + delta;
+        if (newStart < min) { newStart = min; newEnd = min + dur; }
+        if (newEnd > max) { newEnd = max; newStart = max - dur; }
+        timeScaleMin = newStart;
+        timeScaleMax = newEnd;
+        sliderStart.value = newStart;
+        sliderEnd.value = newEnd;
+        updateSliderDisplay();
+        applyFilters();
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDraggingTrack = false;
+        sliderTrackActive.style.cursor = 'grab';
+    });
+
+    initializeTimeInputs();
+
+    // Re-render timeline on window resize to maintain full width
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            const colorBy = document.getElementById('colorBy').value;
+            renderTimeline(colorBy);
+        }, 250);
+    });
+</script>
+
+</body>
+</html>

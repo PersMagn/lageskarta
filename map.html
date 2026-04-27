@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Kartvy - Fiende (Mtrl-mappning)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-mgrs@0.3.0/css/leaflet-mgrs.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; background: #222; scroll-behavior: auto !important; }
+
+        * {
+            box-sizing: border-box;
+        }
+        #time-control {
+            background: #f5f5f5;
+            border-bottom: 2px solid #333;
+            padding: 15px 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 2000;
+            height: auto;
+        }
+
+        #app { display: flex; flex-direction: column; height: 100vh; width: 100%; }
+
+        #map-container { flex-grow: 1; display: flex; margin-top: 80px; }
+        #map { flex-grow: 1; height: 100%; }
+
+        #sidebar {
+            width: 440px;
+            background: #fdfdfd;
+            border-left: 1px solid #bbb;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            z-index: 1000;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .btn-back {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-back:hover { background: #0056b3; }
+
+        textarea { width: 100%; height: 60px; margin-bottom: 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; padding: 5px; box-sizing: border-box; }
+        .obs-list { flex-grow: 1; overflow-y: auto; margin-top: 15px; }
+
+        .obs-item {
+            background: #fff; border: 1px solid #ddd; padding: 12px; margin-bottom: 10px;
+            border-radius: 6px; font-size: 13px;
+        }
+
+        .edit-group { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+        .edit-group label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
+        .edit-group input { padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-family: monospace; font-size: 11px; }
+
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .external-link { font-size: 11px; color: #007bff; text-decoration: none; font-weight: bold; }
+        .external-link:hover { text-decoration: underline; }
+
+        button { cursor: pointer; border-radius: 4px; }
+        .btn-add { background: #28a745; color: white; border: none; padding: 10px; font-weight: bold; width: 100%; }
+        .btn-del { background: #dc3545; color: white; border: none; padding: 4px 8px; font-size: 11px; }
+
+        .time-label {
+            font-weight: bold;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .time-display {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+            min-width: 80px;
+        }
+
+        .slider-container {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 200px;
+            position: relative;
+            padding: 0 10px;
+        }
+
+        .slider-wrapper {
+            position: relative;
+            flex-grow: 1;
+            height: 30px;
+            display: flex;
+            align-items: center;
+        }
+
+        .slider-track-bg {
+            position: absolute;
+            width: 100%;
+            height: 8px;
+            background: #ddd;
+            border-radius: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .slider-track-active {
+            position: absolute;
+            height: 8px;
+            background: #007bff;
+            border-radius: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            pointer-events: all;
+            cursor: grab;
+        }
+
+        .time-slider {
+            position: absolute;
+            width: 100%;
+            height: 30px;
+            top: 0;
+            left: 0;
+            background: none;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .time-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            pointer-events: all;
+            border: 2px solid white;
+        }
+
+        .time-slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            pointer-events: all;
+        }
+
+        .time-slider::-moz-range-track {
+            background: none;
+            border: none;
+        }
+
+        .time-range-display {
+            font-size: 12px;
+            color: #666;
+            min-width: 100px;
+        }
+
+        .leaflet-popup {
+            scroll-behavior: auto !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="time-control">
+        <span class="time-label">🕐 Tid:</span>
+        <div class="time-display" id="currentTime">--:-- - --:--</div>
+        <div class="slider-container">
+            <div class="slider-wrapper">
+                <div class="slider-track-bg"></div>
+                <div class="slider-track-active" id="sliderTrackActive" style="left: 0%; right: 0%;"></div>
+                <input type="range" id="timeSliderStart" class="time-slider" min="0" max="1440" value="0">
+                <input type="range" id="timeSliderEnd" class="time-slider" min="0" max="1440" value="1440">
+            </div>
+        </div>
+        <div class="time-range-display" id="timeRange">00:00 - 23:59</div>
+        <span id="mapSourceBadge" style="font-size:12px; color:#666; background:#eee; padding:4px 10px; border-radius:12px; white-space:nowrap;">🗺️ Laddar...</span>
+    </div>
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <h3>🗺️ Kartvy</h3>
+                <a href="index.html" class="btn-back">← Tillbaka</a>
+            </div>
+
+            <div class="obs-list" id="obsList"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-mgrs@0.3.0/js/leaflet-mgrs.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/milsymbol@2.0.0/dist/milsymbol.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.js"></script>
+
+<script>
+    if (typeof L === 'undefined') {
+        document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;color:red;"><h2>Fel: Leaflet kunde inte laddas</h2><p>Kontrollera din internetanslutning och ladda om sidan.</p></div>';
+        throw new Error('Leaflet (L) is not defined — CDN load failed');
+    }
+
+    const user = "magnuspersson1987@gmail.com";
+    const pass = "i@8fkUkcHZkRfCn";
+    const lmUrl = "https://maps.lantmateriet.se/open/topowebb-ccby/v1/wmts/1.0.0/topowebb/default/3857/{z}/{y}/{x}.png";
+
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+
+    L.TileLayer.Auth = L.TileLayer.extend({
+        createTile: function(coords, done) {
+            const tile = document.createElement('img');
+            const authHeader = 'Basic ' + btoa(user + ':' + pass);
+            fetch(this.getTileUrl(coords), { headers: { 'Authorization': authHeader } })
+                .then(r => {
+                    if (!r.ok) throw new Error('tile fetch failed');
+                    return r.blob();
+                })
+                .then(b => { tile.src = URL.createObjectURL(b); done(null, tile); })
+                .catch(e => done(e));
+            return tile;
+        }
+    });
+
+    const map = L.map('map').setView([58.4, 15.6], 10);
+
+    // Try Lantmäteriet first; fall back to OSM if a test tile fails (e.g. CORS outside nginx)
+    const lmLayer = new L.TileLayer.Auth(lmUrl, { maxZoom: 18, attribution: '© Lantmäteriet' });
+
+    // Probe one tile to detect CORS/auth failure quickly
+    const testUrl = lmUrl.replace('{z}', '8').replace('{y}', '141').replace('{x}', '142');
+    fetch(testUrl, { headers: { 'Authorization': 'Basic ' + btoa(user + ':' + pass) } })
+        .then(r => {
+            if (r.ok) {
+                lmLayer.addTo(map);
+                document.getElementById('mapSourceBadge').textContent = '🗺️ Lantmäteriet';
+            } else {
+                throw new Error('not ok');
+            }
+        })
+        .catch(() => {
+            osmLayer.addTo(map);
+            document.getElementById('mapSourceBadge').textContent = '🗺️ OpenStreetMap';
+        });
+
+    // Add MGRS grid
+    try {
+        L.latlngGraticule({
+            showLabel: true,
+            zoomInterval: [
+                { start: 0, end: 2, interval: 40 },
+                { start: 3, end: 4, interval: 20 },
+                { start: 5, end: 8, interval: 10 },
+                { start: 9, end: 10, interval: 5 },
+                { start: 11, end: 20, interval: 1 }
+            ]
+        }).addTo(map);
+    } catch (e) {
+        console.log('MGRS grid not available');
+    }
+
+    let observations = JSON.parse(sessionStorage.getItem('my_obs')) || [];
+    let mapLayers = L.layerGroup().addTo(map);
+    let windowStartTime = 0;
+    let windowEndTime = 1440;
+    let minTimeMinutes = 0;
+    let maxTimeMinutes = 1440;
+
+    function parseTNRtoMinutes(tnrStr) {
+        if (!tnrStr || tnrStr.length < 4) return 0;
+        const hh = parseInt(tnrStr.substring(2, 4));
+        const mm = parseInt(tnrStr.substring(4, 6));
+        return hh * 60 + mm;
+    }
+
+    function minutesToTimeString(minutes) {
+        const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
+        const mm = String(minutes % 60).padStart(2, '0');
+        return `${hh}:${mm}`;
+    }
+
+    function initializeTimeScale() {
+        // Find min and max time from observations
+        let minTime = Infinity;
+        let maxTime = -Infinity;
+
+        observations.forEach(obs => {
+            const minutes = parseTNRtoMinutes(obs.tnr);
+            if (minutes > 0) {
+                minTime = Math.min(minTime, minutes);
+                maxTime = Math.max(maxTime, minutes);
+            }
+        });
+
+        if (minTime !== Infinity && maxTime !== -Infinity) {
+            minTimeMinutes = minTime;
+            maxTimeMinutes = maxTime;
+        } else {
+            minTimeMinutes = 0;
+            maxTimeMinutes = 1440;
+        }
+
+        const sliderStart = document.getElementById('timeSliderStart');
+        const sliderEnd = document.getElementById('timeSliderEnd');
+        sliderStart.min = minTimeMinutes;
+        sliderStart.max = maxTimeMinutes;
+        sliderStart.value = minTimeMinutes;
+        sliderEnd.min = minTimeMinutes;
+        sliderEnd.max = maxTimeMinutes;
+        sliderEnd.value = maxTimeMinutes;
+
+        windowStartTime = minTimeMinutes;
+        windowEndTime = maxTimeMinutes;
+
+        updateTimeDisplay();
+    }
+
+    function updateTimeDisplay() {
+        document.getElementById('currentTime').textContent = `${minutesToTimeString(windowStartTime)} - ${minutesToTimeString(windowEndTime)}`;
+        document.getElementById('timeRange').textContent = `${minutesToTimeString(minTimeMinutes)} - ${minutesToTimeString(maxTimeMinutes)}`;
+
+        // Update active track visualization
+        const sliderStart = document.getElementById('timeSliderStart');
+        const sliderEnd = document.getElementById('timeSliderEnd');
+        const trackActive = document.getElementById('sliderTrackActive');
+
+        const min = parseInt(sliderStart.min);
+        const max = parseInt(sliderStart.max);
+        const range = max - min;
+
+        const startPercent = ((windowStartTime - min) / range) * 100;
+        const endPercent = ((windowEndTime - min) / range) * 100;
+
+        trackActive.style.left = startPercent + '%';
+        trackActive.style.right = (100 - endPercent) + '%';
+    }
+
+    function filterObservationsByTime() {
+        // Return only observations within the time window
+        return observations.filter(obs => {
+            const obsTime = parseTNRtoMinutes(obs.tnr);
+            return obsTime >= windowStartTime && obsTime <= windowEndTime;
+        });
+    }
+
+    function renderSidebar() {
+        const listDiv = document.getElementById('obsList');
+        const visibleObs = filterObservationsByTime();
+        listDiv.innerHTML = "";
+
+        visibleObs.forEach((obs, visibleIndex) => {
+            const originalIndex = observations.indexOf(obs);
+            const genUrl = `https://spatialillusions.com/unitgenerator/#${obs.sidc}`;
+            const item = document.createElement('div');
+            item.className = 'obs-item';
+            item.innerHTML = `
+                <div onclick="goTo(${originalIndex})" style="cursor:pointer">
+                    <strong>#${obs.lopnummer}</strong> (TNR: ${obs.tnr}) - ${obs.mtrl || 'Okänd'}
+                    <br><small style="color:#666">${obs.info}</small>
+                </div>
+                <div class="edit-group">
+                    <label>Position (MGRS)</label>
+                    <input type="text" value="${obs.pos}" onchange="updateField(${originalIndex}, 'pos', this.value)">
+                    <label>SIDC (Symbolkod)</label>
+                    <input type="text" value="${obs.sidc}" onchange="updateField(${originalIndex}, 'sidc', this.value)">
+                </div>
+                <div class="controls">
+                    <a href="${genUrl}" target="_blank" class="external-link">⚙️ Öppna i generator</a>
+                    <button class="btn-del" onclick="removeObs(${originalIndex})">Ta bort</button>
+                </div>
+            `;
+            listDiv.appendChild(item);
+        });
+
+        if (visibleObs.length === 0) {
+            listDiv.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">Inga rapporter vid denna tid</div>';
+        }
+    }
+
+    function renderMarkers() {
+        mapLayers.clearLayers();
+        const visibleObs = filterObservationsByTime();
+        const posGroups = {};
+        visibleObs.forEach(obs => {
+            const actualCoords = getCoords(obs.pos);
+            if (!actualCoords) return;
+            const key = actualCoords.toString();
+            if (!posGroups[key]) posGroups[key] = [];
+            posGroups[key].push({ obs, actualCoords });
+        });
+
+        Object.keys(posGroups).forEach(key => {
+            const group = posGroups[key];
+            const centerCoords = group[0].actualCoords;
+            const count = group.length;
+
+            group.forEach((item, index) => {
+                let displayCoords = centerCoords;
+                if (count > 1) {
+                    const radius = 0.004;
+                    const angle = (index / count) * (2 * Math.PI);
+                    displayCoords = [centerCoords[0] + radius * Math.cos(angle), centerCoords[1] + radius * Math.sin(angle)];
+                    L.polyline([displayCoords, centerCoords], { color: '#ff4d4d', weight: 1.5, dashArray: '4, 6' }).addTo(mapLayers);
+                }
+                const sym = new ms.Symbol(item.obs.sidc, { size: 30, uniqueDesignation: item.obs.lopnummer });
+                L.marker(displayCoords, {
+                    icon: L.divIcon({ className: '', html: sym.asSVG(), iconAnchor: [sym.getAnchor().x, sym.getAnchor().y] })
+                }).bindPopup(`<b>#${item.obs.lopnummer}</b><br>${item.obs.mtrl}<br>${item.obs.info}`).addTo(mapLayers);
+            });
+        });
+    }
+
+    function saveAndRender() {
+        sessionStorage.setItem('my_obs', JSON.stringify(observations));
+        renderSidebar();
+        renderMarkers();
+    }
+
+    function updateField(index, field, value) {
+        observations[index][field] = value.trim();
+        saveAndRender();
+    }
+
+    function removeObs(index) {
+        observations.splice(index, 1);
+        saveAndRender();
+    }
+
+    function goTo(index) {
+        const coords = getCoords(observations[index].pos);
+        if(coords) map.flyTo(coords, 13);
+    }
+
+    function getCoords(mgrsStr) {
+        try {
+            const p = mgrs.toPoint(mgrsStr.replace(/\s+/g, ''));
+            return [p[1], p[0]];
+        } catch (e) {
+            return null;
+        }
+    }
+
+    renderSidebar();
+    renderMarkers();
+
+    // Initialize time scale
+    initializeTimeScale();
+
+    // Time slider event listeners
+    document.getElementById('timeSliderStart').addEventListener('input', (e) => {
+        let startValue = parseInt(e.target.value);
+        const endValue = parseInt(document.getElementById('timeSliderEnd').value);
+
+        // Prevent start from going past end
+        if (startValue > endValue) {
+            startValue = endValue;
+            e.target.value = endValue;
+        }
+
+        windowStartTime = startValue;
+        updateTimeDisplay();
+        renderSidebar();
+        renderMarkers();
+    });
+
+    document.getElementById('timeSliderEnd').addEventListener('input', (e) => {
+        let endValue = parseInt(e.target.value);
+        const startValue = parseInt(document.getElementById('timeSliderStart').value);
+
+        // Prevent end from going before start
+        if (endValue < startValue) {
+            endValue = startValue;
+            e.target.value = startValue;
+        }
+
+        windowEndTime = endValue;
+        updateTimeDisplay();
+        renderSidebar();
+        renderMarkers();
+    });
+
+    // Drag the blue active track to move the entire time window
+    const sliderTrackActive = document.getElementById('sliderTrackActive');
+    const sliderWrapper = document.querySelector('.slider-wrapper');
+    let isDraggingTrack = false;
+    let dragStartX = 0;
+    let dragStartTimeStart = 0;
+    let dragStartTimeEnd = 0;
+
+    sliderTrackActive.addEventListener('mousedown', (e) => {
+        isDraggingTrack = true;
+        dragStartX = e.clientX;
+        dragStartTimeStart = windowStartTime;
+        dragStartTimeEnd = windowEndTime;
+        sliderTrackActive.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDraggingTrack) return;
+
+        const sliderStart = document.getElementById('timeSliderStart');
+        const sliderEnd = document.getElementById('timeSliderEnd');
+        const wrapperRect = sliderWrapper.getBoundingClientRect();
+        const wrapperWidth = wrapperRect.width;
+        const min = parseInt(sliderStart.min);
+        const max = parseInt(sliderStart.max);
+        const range = max - min;
+        const windowDuration = dragStartTimeEnd - dragStartTimeStart;
+
+        // Calculate pixel movement
+        const deltaX = e.clientX - dragStartX;
+        const deltaMinutes = (deltaX / wrapperWidth) * range;
+
+        // Calculate new start and end times
+        let newStart = dragStartTimeStart + deltaMinutes;
+        let newEnd = dragStartTimeEnd + deltaMinutes;
+
+        // Prevent going beyond bounds
+        if (newStart < min) {
+            newStart = min;
+            newEnd = min + windowDuration;
+        }
+        if (newEnd > max) {
+            newEnd = max;
+            newStart = max - windowDuration;
+        }
+
+        windowStartTime = Math.round(newStart);
+        windowEndTime = Math.round(newEnd);
+
+        sliderStart.value = windowStartTime;
+        sliderEnd.value = windowEndTime;
+
+        updateTimeDisplay();
+        renderSidebar();
+        renderMarkers();
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDraggingTrack = false;
+        sliderTrackActive.style.cursor = 'grab';
+    });
+</script>
+
+</body>
+</html>
