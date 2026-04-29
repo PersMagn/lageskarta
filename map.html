@@ -510,14 +510,11 @@
     }
 
     function getCoords(mgrsStr) {
-        if (!mgrsStr) return null;
+        if (!mgrsStr) { console.warn('getCoords: empty input'); return null; }
         const clean = mgrsStr.replace(/\s+/g, '');
-        // MGRS numeric part length must be even (2,4,6,8,10 digits).
-        // Try full precision first, then fall back by trimming 2 digits at a time.
         const prefix = clean.match(/^(\d{1,2}[A-Z]{3})/)?.[1] || '';
         const digits = clean.substring(prefix.length);
         const attempts = [];
-        // Build attempts from longest down to shortest even length
         for (let len = digits.length % 2 === 0 ? digits.length : digits.length - 1; len >= 2; len -= 2) {
             attempts.push(prefix + digits.substring(0, len));
         }
@@ -525,17 +522,37 @@
         for (const attempt of attempts) {
             try {
                 const p = mgrs.toPoint(attempt);
-                if (p && !isNaN(p[0]) && !isNaN(p[1])) return [p[1], p[0]];
-            } catch (e) { /* try next */ }
+                if (p && !isNaN(p[0]) && !isNaN(p[1])) {
+                    console.log('getCoords OK:', mgrsStr, '->', attempt, '->', p);
+                    return [p[1], p[0]];
+                }
+            } catch (e) {
+                console.warn('getCoords fail:', attempt, e.message);
+            }
         }
+        console.error('getCoords: all attempts failed for', mgrsStr);
         return null;
     }
 
+    function debugObservations() {
+        console.group('=== Observation Debug ===');
+        console.log('Total observations:', observations.length);
+        observations.forEach(o => {
+            console.log(`#${o.lopnummer} TNR="${o.tnr}" koordinater="${o.koordinater}" pos="${o.pos}" mtrl="${o.mtrl}"`);
+        });
+        console.log('windowStartTime:', windowStartTime, 'windowEndTime:', windowEndTime);
+        const vis = filterObservationsByTime();
+        console.log('Visible after time filter:', vis.length);
+        vis.forEach(o => console.log(`  visible: #${o.lopnummer} t=${parseTNRtoMinutes(o.tnr)} koord="${o.koordinater}"`));
+        console.groupEnd();
+    }
+
+    // Initialize time scale first so window covers all observations
+    initializeTimeScale();
+
     renderSidebar();
     renderMarkers();
-
-    // Initialize time scale
-    initializeTimeScale();
+    debugObservations();
 
     // Time slider event listeners
     document.getElementById('timeSliderStart').addEventListener('input', (e) => {
