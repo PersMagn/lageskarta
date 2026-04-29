@@ -309,7 +309,9 @@
     // Convert TNR (DDHHMM or HHMM) to absolute minutes, including day
     function parseTNRtoMinutes(tnrStr) {
         if (!tnrStr) return 0;
-        const cleaned = String(tnrStr).replace(/\s+/g, '');
+        let cleaned = String(tnrStr).replace(/\s+/g, '');
+        // Normalise spurious leading zero from spreadsheets (7 digits → last 6)
+        if (cleaned.length === 7) cleaned = cleaned.substring(1);
         let day = 0, hh = 0, mm = 0;
         if (cleaned.length >= 6) {
             day = parseInt(cleaned.substring(0, 2)) || 0;
@@ -506,12 +508,25 @@
     }
 
     function getCoords(mgrsStr) {
-        try {
-            const p = mgrs.toPoint(mgrsStr.replace(/\s+/g, ''));
-            return [p[1], p[0]];
-        } catch (e) {
-            return null;
+        if (!mgrsStr) return null;
+        const clean = mgrsStr.replace(/\s+/g, '');
+        // MGRS numeric part length must be even (2,4,6,8,10 digits).
+        // Try full precision first, then fall back by trimming 2 digits at a time.
+        const prefix = clean.match(/^(\d{1,2}[A-Z]{3})/)?.[1] || '';
+        const digits = clean.substring(prefix.length);
+        const attempts = [];
+        // Build attempts from longest down to shortest even length
+        for (let len = digits.length % 2 === 0 ? digits.length : digits.length - 1; len >= 2; len -= 2) {
+            attempts.push(prefix + digits.substring(0, len));
         }
+        if (!attempts.length) attempts.push(clean);
+        for (const attempt of attempts) {
+            try {
+                const p = mgrs.toPoint(attempt);
+                if (p && !isNaN(p[0]) && !isNaN(p[1])) return [p[1], p[0]];
+            } catch (e) { /* try next */ }
+        }
+        return null;
     }
 
     renderSidebar();

@@ -515,23 +515,19 @@
     // Parse TNR to minutes (handles both "HHMM" and "DDHHMM" formats)
     function parseTNRtoMinutes(tnrStr) {
         if (!tnrStr) return 0;
-        const cleaned = tnrStr.replace(/\s+/g, '');
+        let cleaned = String(tnrStr).replace(/\s+/g, '');
+        // Normalise spurious leading zero from spreadsheets (7 digits → last 6)
+        if (cleaned.length === 7) cleaned = cleaned.substring(1);
 
-        let day = 0;
-        let hh = 0;
-        let mm = 0;
-
+        let day = 0, hh = 0, mm = 0;
         if (cleaned.length >= 6) {
-            // Format: DDHHMM
             day = parseInt(cleaned.substring(0, 2)) || 0;
-            hh = parseInt(cleaned.substring(2, 4)) || 0;
-            mm = parseInt(cleaned.substring(4, 6)) || 0;
+            hh  = parseInt(cleaned.substring(2, 4)) || 0;
+            mm  = parseInt(cleaned.substring(4, 6)) || 0;
         } else if (cleaned.length >= 4) {
-            // Format: HHMM
-            hh = parseInt(cleaned.substring(0, 2)) || 0;
-            mm = parseInt(cleaned.substring(2, 4)) || 0;
+            hh  = parseInt(cleaned.substring(0, 2)) || 0;
+            mm  = parseInt(cleaned.substring(2, 4)) || 0;
         }
-
         return (day * 24 * 60) + (hh * 60) + mm;
     }
 
