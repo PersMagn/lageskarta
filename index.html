@@ -265,6 +265,97 @@
             border: 1px solid #ffeeba;
         }
 
+        /* Edit Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: #2d2d2d;
+            border: 1px solid #007bff;
+            border-radius: 12px;
+            padding: 30px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+
+        .modal h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #fff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #aaa;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 9px 12px;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 8px rgba(0, 123, 255, 0.3);
+        }
+
+        .form-group textarea {
+            height: 70px;
+            resize: vertical;
+        }
+
+        .sidc-preview {
+            font-size: 11px;
+            color: #666;
+            font-family: 'Courier New', monospace;
+            margin-top: 4px;
+        }
+
         @media (max-width: 768px) {
             .main-grid {
                 grid-template-columns: 1fr;
@@ -350,6 +441,76 @@ Format: Löpnummer	TNR	Från	Informationselement	Plats	Org	Mtrl	Mtrl subgrupp	Ti
             <h3>Tidslinjal & Analys</h3>
             <p>Analysera tidsserier, trender och fördelningar av observationer</p>
         </a>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <h2>✏️ Redigera Observation</h2>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Löpnummer</label>
+                <input type="text" id="edit-lopnummer" placeholder="t.ex. 1">
+            </div>
+            <div class="form-group">
+                <label>TNR (DDHHMM)</label>
+                <input type="text" id="edit-tnr" placeholder="t.ex. 130610">
+            </div>
+            <div class="form-group">
+                <label>Från</label>
+                <input type="text" id="edit-fran" placeholder="t.ex. Spanare">
+            </div>
+            <div class="form-group">
+                <label>Organisation</label>
+                <input type="text" id="edit-org" placeholder="t.ex. Nord">
+            </div>
+            <div class="form-group full-width">
+                <label>Informationselement</label>
+                <input type="text" id="edit-info" placeholder="t.ex. Stridsvagn vid väg">
+            </div>
+            <div class="form-group">
+                <label>Plats / Position</label>
+                <input type="text" id="edit-pos" placeholder="t.ex. 32VNL5050">
+            </div>
+            <div class="form-group">
+                <label>Materiel (Mtrl)</label>
+                <input type="text" id="edit-mtrl" placeholder="t.ex. Stridsvagn" oninput="updateSIDCPreview()">
+            </div>
+            <div class="form-group">
+                <label>Mtrl Subgrupp</label>
+                <input type="text" id="edit-mtrlSubgrupp" placeholder="t.ex. Huvudtyp">
+            </div>
+            <div class="form-group">
+                <label>Tillförlitlighet</label>
+                <input type="text" id="edit-tillforlitlighet" placeholder="t.ex. Hög">
+            </div>
+            <div class="form-group">
+                <label>Sakriktighet</label>
+                <input type="text" id="edit-sakriktighet" placeholder="t.ex. Hög">
+            </div>
+            <div class="form-group">
+                <label>SIDC (auto)</label>
+                <input type="text" id="edit-sidc" placeholder="Auto-genereras från Mtrl" style="font-family: 'Courier New', monospace; font-size: 11px;">
+                <div class="sidc-preview">Lämna tom för att auto-generera från Mtrl</div>
+            </div>
+            <div class="form-group">
+                <label>Referenser</label>
+                <input type="text" id="edit-referenser" placeholder="t.ex. TV1">
+            </div>
+            <div class="form-group full-width">
+                <label>Kommentar</label>
+                <textarea id="edit-kommentar" placeholder="Fritext kommentar..."></textarea>
+            </div>
+            <div class="form-group full-width">
+                <label>Bedömning</label>
+                <input type="text" id="edit-bedömning" placeholder="t.ex. Bekräftad / Sannolik">
+            </div>
+        </div>
+        <div class="button-group">
+            <button class="btn-primary" onclick="saveEdit()">💾 Spara</button>
+            <button class="btn-secondary" onclick="closeModal()">✖ Avbryt</button>
+        </div>
     </div>
 </div>
 
@@ -532,14 +693,86 @@ Format: Löpnummer	TNR	Från	Informationselement	Plats	Org	Mtrl	Mtrl subgrupp	Ti
         `).join('');
     }
 
-    // Edit observation (placeholder)
+    // Current edit index
+    let currentEditIndex = null;
+
+    // Open edit modal
     function editObs(index) {
         const obs = loadObservations();
-        const obsToEdit = obs[index];
-        obsToEdit.sidc = getAutoSIDC(obsToEdit.mtrl);
-        saveObservations(obs);
-        showMessage('Observation uppdaterad', 'success');
+        const o = obs[index];
+        currentEditIndex = index;
+
+        document.getElementById('edit-lopnummer').value      = o.lopnummer || '';
+        document.getElementById('edit-tnr').value            = o.tnr || '';
+        document.getElementById('edit-fran').value           = o.från || '';
+        document.getElementById('edit-org').value            = o.org || '';
+        document.getElementById('edit-info').value           = o.info || '';
+        document.getElementById('edit-pos').value            = o.pos || '';
+        document.getElementById('edit-mtrl').value           = o.mtrl || '';
+        document.getElementById('edit-mtrlSubgrupp').value   = o.mtrlSubgrupp || '';
+        document.getElementById('edit-tillforlitlighet').value = o.tillförlitlighet || '';
+        document.getElementById('edit-sakriktighet').value   = o.sakriktighet || '';
+        document.getElementById('edit-sidc').value           = o.sidc || '';
+        document.getElementById('edit-referenser').value     = o.referenser || '';
+        document.getElementById('edit-kommentar').value      = o.kommentar || '';
+        document.getElementById('edit-bedömning').value      = o.bedömning || '';
+
+        document.getElementById('editModal').classList.add('open');
     }
+
+    // Update SIDC preview when mtrl field changes
+    function updateSIDCPreview() {
+        const mtrl = document.getElementById('edit-mtrl').value;
+        const sidcField = document.getElementById('edit-sidc');
+        if (!sidcField.value || sidcField.dataset.wasAuto === 'true') {
+            sidcField.value = getAutoSIDC(mtrl);
+            sidcField.dataset.wasAuto = 'true';
+        }
+    }
+
+    // Close modal
+    function closeModal() {
+        document.getElementById('editModal').classList.remove('open');
+        currentEditIndex = null;
+    }
+
+    // Save edit
+    function saveEdit() {
+        if (currentEditIndex === null) return;
+        const obs = loadObservations();
+        const o = obs[currentEditIndex];
+
+        const mtrl = document.getElementById('edit-mtrl').value;
+        const sidcInput = document.getElementById('edit-sidc').value.trim();
+
+        obs[currentEditIndex] = {
+            ...o,
+            lopnummer:       document.getElementById('edit-lopnummer').value,
+            tnr:             document.getElementById('edit-tnr').value,
+            från:            document.getElementById('edit-fran').value,
+            org:             document.getElementById('edit-org').value,
+            info:            document.getElementById('edit-info').value,
+            pos:             document.getElementById('edit-pos').value,
+            mtrl:            mtrl,
+            mtrlSubgrupp:    document.getElementById('edit-mtrlSubgrupp').value,
+            tillförlitlighet: document.getElementById('edit-tillforlitlighet').value,
+            sakriktighet:    document.getElementById('edit-sakriktighet').value,
+            sidc:            sidcInput || getAutoSIDC(mtrl),
+            referenser:      document.getElementById('edit-referenser').value,
+            kommentar:       document.getElementById('edit-kommentar').value,
+            bedömning:       document.getElementById('edit-bedömning').value,
+            timestamp:       parseTNR(document.getElementById('edit-tnr').value),
+        };
+
+        saveObservations(obs);
+        closeModal();
+        showMessage('✓ Observation uppdaterad', 'success');
+    }
+
+    // Close modal when clicking overlay background
+    document.getElementById('editModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
 
     // Delete observation
     function deleteObs(index) {

@@ -499,6 +499,19 @@
     let timeScaleMin = null;
     let timeScaleMax = null;
 
+    // Convert absolute minutes back to TNR string (DDHHMM),
+    // correctly wrapping the day within the actual month.
+    // baseDay is the real calendar day (1-31) of the earliest observation.
+    function minutesToTNR(totalMinutes, baseDay, daysInMonth) {
+        const dayOffset = Math.floor(totalMinutes / (24 * 60));
+        const remaining = totalMinutes % (24 * 60);
+        const hh = Math.floor(remaining / 60);
+        const mm = remaining % 60;
+        // Wrap calendar day within month (1-based, mod daysInMonth)
+        const calDay = ((baseDay - 1 + dayOffset) % daysInMonth) + 1;
+        return `${String(calDay).padStart(2, '0')}${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}`;
+    }
+
     // Parse TNR to minutes (handles both "HHMM" and "DDHHMM" formats)
     function parseTNRtoMinutes(tnrStr) {
         if (!tnrStr) return 0;
@@ -714,15 +727,28 @@
         const timelineWidth = Math.max(wrapperWidth - 40, 500); // Subtract padding (20px each side), minimum 500px
         const pixelsPerMinute = timelineWidth / timeRange;
         let timeAxisHTML = '';
-        const markInterval = timeRange > 480 ? 120 : 60; // 2 hours if range > 8 hours, else 1 hour
+        // Adaptive interval: 30 min / 1 h / 2 h / 6 h / 12 h depending on range
+        let markInterval;
+        if (timeRange <= 120)       markInterval = 30;
+        else if (timeRange <= 480)  markInterval = 60;
+        else if (timeRange <= 1440) markInterval = 120;
+        else if (timeRange <= 4320) markInterval = 360;
+        else                        markInterval = 720;
 
-        for (let t = minTime; t <= maxTime; t += markInterval) {
-            const days = Math.floor(t / (24 * 60));
-            const remainingMinutes = t % (24 * 60);
-            const hh = Math.floor(remainingMinutes / 60);
-            const mm = remainingMinutes % 60;
-            const dayStr = days > 0 ? `D${days} ` : '';
-            const timeStr = `${dayStr}${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        // Derive base calendar day + days-in-month from the earliest observation's TNR
+        const _firstObs = allObservations.find(o => parseTNRtoMinutes(o.tnr) === sortedTimes[0]);
+        const _firstTNR = (_firstObs ? String(_firstObs.tnr) : '').replace(/\s+/g, '');
+        const baseDay = _firstTNR.length >= 6 ? (parseInt(_firstTNR.substring(0, 2)) || 1) : 1;
+        const _now = new Date();
+        const daysInMonth = new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate();
+
+        // Snap first tick to a clean interval boundary
+        const firstTick = Math.ceil(minTime / markInterval) * markInterval;
+        for (let t = firstTick; t <= maxTime; t += markInterval) {
+            const tnr = minutesToTNR(t, baseDay, daysInMonth);
+            const dd   = tnr.substring(0, 2);
+            const hhmm = tnr.substring(2, 4) + ':' + tnr.substring(4, 6);
+            const timeStr = dd + '\u00a0' + hhmm;
             const position = ((t - minTime) / timeRange) * timelineWidth;
             timeAxisHTML += `<div class="time-mark" style="left: ${position}px; width: 80px;">${timeStr}</div>`;
         }
@@ -862,9 +888,20 @@
         trackActive.style.left = startPercent + '%';
         trackActive.style.right = (100 - endPercent) + '%';
 
-        const fmt = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-        document.getElementById('labelStart').textContent = fmt(startVal);
-        document.getElementById('labelEnd').textContent = fmt(endVal);
+        // Format slider labels as TNR (DDHHMM) using base day of earliest observation
+        const _sliderFirstObs = allObservations.length ? allObservations.reduce((a, b) =>
+            parseTNRtoMinutes(a.tnr) <= parseTNRtoMinutes(b.tnr) ? a : b) : null;
+        const _sliderTNR = (_sliderFirstObs ? String(_sliderFirstObs.tnr) : '').replace(/\s+/g, '');
+        const _sliderBaseDay = _sliderTNR.length >= 6 ? (parseInt(_sliderTNR.substring(0, 2)) || 1) : 1;
+        const _sliderNow = new Date();
+        const _sliderDIM = new Date(_sliderNow.getFullYear(), _sliderNow.getMonth() + 1, 0).getDate();
+        const fmtSlider = m => {
+            if (!allObservations.length) return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+            const t = minutesToTNR(m, _sliderBaseDay, _sliderDIM);
+            return t.substring(0,2) + '\u00a0' + t.substring(2,4) + ':' + t.substring(4,6);
+        };
+        document.getElementById('labelStart').textContent = fmtSlider(startVal);
+        document.getElementById('labelEnd').textContent = fmtSlider(endVal);
     }
 
     document.getElementById('timeSliderStart').addEventListener('input', (e) => {

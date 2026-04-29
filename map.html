@@ -19,18 +19,14 @@
             gap: 15px;
             align-items: center;
             flex-wrap: wrap;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+            flex-shrink: 0;      /* never shrink so map can't push it off-screen */
             z-index: 2000;
-            height: auto;
         }
 
-        #app { display: flex; flex-direction: column; height: 100vh; width: 100%; }
+        #app { display: flex; flex-direction: column; height: 100vh; width: 100%; overflow: hidden; }
 
-        #map-container { flex-grow: 1; display: flex; margin-top: 80px; }
-        #map { flex-grow: 1; height: 100%; }
+        #map-container { flex: 1 1 0; min-height: 0; display: flex; }
+        #map { flex-grow: 1; min-height: 0; }
 
         #sidebar {
             width: 440px;
@@ -41,6 +37,8 @@
             padding: 15px;
             z-index: 1000;
             box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+            overflow: hidden;   /* contain children; obs-list scrolls internally */
+            min-height: 0;
         }
 
         .sidebar-header {
@@ -308,18 +306,52 @@
     let minTimeMinutes = 0;
     let maxTimeMinutes = 1440;
 
+    // Convert TNR (DDHHMM or HHMM) to absolute minutes, including day
     function parseTNRtoMinutes(tnrStr) {
-        if (!tnrStr || tnrStr.length < 4) return 0;
-        const hh = parseInt(tnrStr.substring(2, 4));
-        const mm = parseInt(tnrStr.substring(4, 6));
-        return hh * 60 + mm;
+        if (!tnrStr) return 0;
+        const cleaned = String(tnrStr).replace(/\s+/g, '');
+        let day = 0, hh = 0, mm = 0;
+        if (cleaned.length >= 6) {
+            day = parseInt(cleaned.substring(0, 2)) || 0;
+            hh  = parseInt(cleaned.substring(2, 4)) || 0;
+            mm  = parseInt(cleaned.substring(4, 6)) || 0;
+        } else if (cleaned.length >= 4) {
+            hh  = parseInt(cleaned.substring(0, 2)) || 0;
+            mm  = parseInt(cleaned.substring(2, 4)) || 0;
+        }
+        return day * 24 * 60 + hh * 60 + mm;
     }
 
-    function minutesToTimeString(minutes) {
-        const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
-        const mm = String(minutes % 60).padStart(2, '0');
-        return `${hh}:${mm}`;
+    // Convert absolute minutes back to TNR string, wrapping day within current month
+    function minutesToTNR(totalMinutes, baseDay, daysInMonth) {
+        const dayOffset   = Math.floor(totalMinutes / (24 * 60));
+        const remaining   = totalMinutes % (24 * 60);
+        const hh = Math.floor(remaining / 60);
+        const mm = remaining % 60;
+        const calDay = ((baseDay - 1 + dayOffset) % daysInMonth) + 1;
+        return String(calDay).padStart(2, '0')
+             + String(hh).padStart(2, '0')
+             + String(mm).padStart(2, '0');
     }
+
+    // Format absolute minutes as "DD HH:MM" TNR display string
+    function minutesToTNRDisplay(totalMinutes) {
+        if (!observations.length) {
+            // Fallback if no data: just HH:MM
+            return String(Math.floor(totalMinutes / 60)).padStart(2,'0') + ':'
+                 + String(totalMinutes % 60).padStart(2,'0');
+        }
+        const firstObs = observations.reduce((a, b) =>
+            parseTNRtoMinutes(a.tnr) <= parseTNRtoMinutes(b.tnr) ? a : b);
+        const firstTNR = String(firstObs.tnr).replace(/\s+/g, '');
+        const baseDay = firstTNR.length >= 6 ? (parseInt(firstTNR.substring(0, 2)) || 1) : 1;
+        const now = new Date();
+        const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const t = minutesToTNR(totalMinutes, baseDay, dim);
+        return t.substring(0,2) + '\u00a0' + t.substring(2,4) + ':' + t.substring(4,6);
+    }
+
+
 
     function initializeTimeScale() {
         // Find min and max time from observations
@@ -358,8 +390,8 @@
     }
 
     function updateTimeDisplay() {
-        document.getElementById('currentTime').textContent = `${minutesToTimeString(windowStartTime)} - ${minutesToTimeString(windowEndTime)}`;
-        document.getElementById('timeRange').textContent = `${minutesToTimeString(minTimeMinutes)} - ${minutesToTimeString(maxTimeMinutes)}`;
+        document.getElementById('currentTime').textContent = `${minutesToTNRDisplay(windowStartTime)} – ${minutesToTNRDisplay(windowEndTime)}`;
+        document.getElementById('timeRange').textContent = `${minutesToTNRDisplay(minTimeMinutes)} – ${minutesToTNRDisplay(maxTimeMinutes)}`;
 
         // Update active track visualization
         const sliderStart = document.getElementById('timeSliderStart');
