@@ -515,13 +515,182 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
 </div>
 
 <script>
-    // Known SIDC codes
-    const knownSIDCs = {
-        "pansarskyttevagn": "130610000012110200000000000000",
-        "raketartilleri": "130610000013030041000000000000",
-        "saknas": "130610000012110000000000000000",
-        "stridsvagn": "130610000012050000000000000000"
-    };
+    // ── Equipment lookup table (from reference list) ────────────────────────
+    // Maps designator/type keywords → { dim, equip }
+    // dim: 'G'=ground, 'A'=air, 'S'=sea/surface, 'U'=subsurface
+    // equip: 6-char APP-6 function code
+    const EQUIP_TABLE = [
+        // ── Designator exact/prefix matches (checked first) ──────────────────
+        // Stridsvagnar
+        { keys: ['t-72','t-80','t-90'],                        dim:'G', equip:'120500', label:'Stridsvagn' },
+        // Pansarskyttevagnar / APC
+        { keys: ['bmd-2','bmd-3','bmd-4'],                     dim:'G', equip:'120502', label:'Pansarskyttevagn' },
+        { keys: ['bmp-2','bmp-3','bmo-t','mt-lb','mt-lbu','btr-d','btr-mdm'], dim:'G', equip:'120502', label:'Pansarskyttevagn' },
+        { keys: ['btr-80','btr-82','btr-d'],                   dim:'G', equip:'120502', label:'Pansarskyttebil' },
+        { keys: ['tigr-m'],                                    dim:'G', equip:'120502', label:'Pansarterrängbil' },
+        // Artilleri
+        { keys: ['2s1','2s3','2s19','2s7','2s25'],             dim:'G', equip:'120300', label:'Artilleri' },
+        { keys: ['2a65','d-30'],                               dim:'G', equip:'120300', label:'Artilleri' },
+        { keys: ['9k51','9k57','9k48','bm-21'],                dim:'G', equip:'120300', label:'Raketartilleri' },
+        { keys: ['2b11','2b14','2b16','2b9m','2s4','2s9'],     dim:'G', equip:'120300', label:'Granatkastare' },
+        { keys: ['tos-1a'],                                    dim:'G', equip:'120300', label:'Eldkastare' },
+        { keys: ['9k720','iskander'],                          dim:'G', equip:'120300', label:'Markrobotsystem' },
+        // Luftvärn
+        { keys: ['buk-m','s-300','osa-akm','tor-m','strela-10','zu23','zsu-23','2s6','tunguska'], dim:'G', equip:'120400', label:'Luftvärn' },
+        { keys: ['igla','verba','sa-14','sa-18','sa-24'],      dim:'G', equip:'120400', label:'Luftvärnsrobot (Man-buren)' },
+        // Pansarvärn
+        { keys: ['9k111','9k115','9k116','9k119','9k129','9p148','9p149','9p157','kornet','fagot','metis'], dim:'G', equip:'120500', label:'Pansarvärnsrobotsystem' },
+        { keys: ['rpg-','mt-12','2a45'],                       dim:'G', equip:'120500', label:'Pansarvärn' },
+        // Ingenjör / Specialfordon
+        { keys: ['mtu-72','tmm-3','pp-91','pmp'],              dim:'G', equip:'120600', label:'Broläggare' },
+        { keys: ['gmz-3','umz'],                               dim:'G', equip:'120600', label:'Mineringsfordon' },
+        { keys: ['bmr-3m','ur-77','uran-6'],                   dim:'G', equip:'120600', label:'Minröjningsfordon' },
+        { keys: ['bat-2','btm-4','imr-2'],                     dim:'G', equip:'120600', label:'Fältarbetsfordon' },
+        // Ledning/Radar
+        { keys: ['1l219','1l271','1l277','fara','kredo','psnr','prp-4'],dim:'G', equip:'120100', label:'Radar' },
+        { keys: ['r-142','r-149','1v12','1v17'],               dim:'G', equip:'120100', label:'Ledningsfordon' },
+        { keys: ['pu-12'],                                     dim:'G', equip:'120400', label:'Luftvärnsledning' },
+        // NBC
+        { keys: ['rchm-'],                                     dim:'G', equip:'120700', label:'NBC-fordon' },
+        // Transport/Fordon
+        { keys: ['ural-4320','pts-2'],                         dim:'G', equip:'121100', label:'Transportfordon' },
+        // UAS/UGV
+        { keys: ['orlan-10','eleron','forpost','granat-1','granat-4'], dim:'A', equip:'121200', label:'UAV' },
+        { keys: ['bas-01g','mrk-002','uran-9','soratnik'],     dim:'G', equip:'121200', label:'UGV' },
+        // ── Helikoptrar ──────────────────────────────────────────────────────
+        { keys: ['ka-50','ka-52','mi-24','mi-25','mi-28','mi-35'], dim:'A', equip:'110200', label:'Attackhelikopter' },
+        { keys: ['mi-26','mi-8','mi-17','mi-6'],               dim:'A', equip:'110100', label:'Transporthelikopter' },
+        { keys: ['ka-25','ka-27','ka-28','ka-29','mi-14'],     dim:'A', equip:'110300', label:'Ubåtsjakthelikopter' },
+        { keys: ['ka-','mi-','ka-26','mi-1','mi-2','mi-4','mi-10'], dim:'A', equip:'110000', label:'Helikopter' },
+        // ── Stridsflygplan ───────────────────────────────────────────────────
+        { keys: ['su-25','su-24','su-22','su-20','su-17','su-7','su-9','su-15'], dim:'A', equip:'120200', label:'Attackflygplan' },
+        { keys: ['su-27','su-33','mig-29','mig-31','mig-25','mig-23','mig-21','mig-19','mig-17','mig-15'], dim:'A', equip:'120100', label:'Jaktflygplan' },
+        { keys: ['tu-22','tu-95','tu-142','il-28','jak-28','m-4'], dim:'A', equip:'120300', label:'Bombflygplan' },
+        { keys: ['su-','mig-','jak-28p','jak-38','l-139','l-159','su-11'], dim:'A', equip:'120000', label:'Stridsflygplan' },
+        // ── Transportflygplan ────────────────────────────────────────────────
+        { keys: ['il-76','il-62','il-86','an-124','an-22','an-225'], dim:'A', equip:'110100', label:'Tungt transportflygplan' },
+        { keys: ['an-','il-','tu-134','tu-154','tu-144','jak-40','jak-42'], dim:'A', equip:'110000', label:'Transportflygplan' },
+        // ── Fartyg ───────────────────────────────────────────────────────────
+        { keys: ['kilo','lada'],                               dim:'U', equip:'130000', label:'Ubåt' },
+        { keys: ['admiral gorshkov','admiral grigorovich','neustrashimy','sovremenny','steregushchiy'], dim:'S', equip:'120100', label:'Ytstridsfartyg' },
+        { keys: ['nanuchka','pauk','tarantul'],                dim:'S', equip:'120100', label:'Ytstridsfartyg' },
+        { keys: ['pomornik','roupucha','ondatra','serna','ivan gren'], dim:'S', equip:'120200', label:'Landstigningsfartyg' },
+        { keys: ['alexandrit','lida','sonya'],                 dim:'S', equip:'120500', label:'Minröjningsfartyg' },
+        { keys: ['parchim'],                                   dim:'S', equip:'120100', label:'Korvett' },
+        // ── Typ-kategori fallbacks (from column 3 of the reference list) ─────
+        { keys: ['stridsvagn'],                                dim:'G', equip:'120500', label:'Stridsvagn' },
+        { keys: ['pansarskyttevagn','pansarskyttebil'],        dim:'G', equip:'120502', label:'Pansarskyttevagn' },
+        { keys: ['pansarterrängbil'],                          dim:'G', equip:'120502', label:'Pansarterrängbil' },
+        { keys: ['raketartilleri'],                            dim:'G', equip:'120300', label:'Raketartilleri' },
+        { keys: ['artilleri'],                                 dim:'G', equip:'120300', label:'Artilleri' },
+        { keys: ['granatkastare'],                             dim:'G', equip:'120300', label:'Granatkastare' },
+        { keys: ['luftvärnsrobotsystem','luftvärnskanonvagn','luftvärnsrobot','luftvärnskanon','luftvärnsrobotkanonvagn'], dim:'G', equip:'120400', label:'Luftvärn' },
+        { keys: ['pansarvärnsrobotsystem','pansarvärnsrobot','pansarvärnskanon','pansarvärnsrobotbil','pansarvärnsrobotvagn'], dim:'G', equip:'120500', label:'Pansarvärn' },
+        { keys: ['attackhelikopter'],                          dim:'A', equip:'110200', label:'Attackhelikopter' },
+        { keys: ['transporthelikopter'],                       dim:'A', equip:'110100', label:'Transporthelikopter' },
+        { keys: ['helikopter'],                                dim:'A', equip:'110000', label:'Helikopter' },
+        { keys: ['jakt/attackflygplan'],                       dim:'A', equip:'120000', label:'Stridsflygplan' },
+        { keys: ['bombflygplan'],                              dim:'A', equip:'120300', label:'Bombflygplan' },
+        { keys: ['transportflygplan'],                         dim:'A', equip:'110000', label:'Transportflygplan' },
+        { keys: ['markrobotsystem'],                           dim:'G', equip:'120300', label:'Markrobotsystem' },
+        { keys: ['eldkastare'],                                dim:'G', equip:'120300', label:'Eldkastare' },
+        { keys: ['stridsfältsradar','artillerilokaliseringsradar'], dim:'G', equip:'120100', label:'Radar' },
+        { keys: ['uav'],                                       dim:'A', equip:'121200', label:'UAV' },
+        { keys: ['ugv','ug(c)v'],                              dim:'G', equip:'121200', label:'UGV' },
+        { keys: ['ubåt'],                                      dim:'U', equip:'130000', label:'Ubåt' },
+        { keys: ['ytstridsfartyg','korvett','fregatt'],        dim:'S', equip:'120100', label:'Ytstridsfartyg' },
+        { keys: ['landstigningsfartyg'],                       dim:'S', equip:'120200', label:'Landstigningsfartyg' },
+        { keys: ['minröjningsfartyg'],                         dim:'S', equip:'120500', label:'Minröjningsfartyg' },
+        { keys: ['underhållsfartyg'],                          dim:'S', equip:'110000', label:'Underhållsfartyg' },
+        { keys: ['minkastarterrängbil','mineringspansarvagn'], dim:'G', equip:'120600', label:'Mineringsfordon' },
+        { keys: ['minröjningspansarvagn','minröjnings-ugv'],   dim:'G', equip:'120600', label:'Minröjningsfordon' },
+        { keys: ['broläggare','brosystem','flytbro'],          dim:'G', equip:'120600', label:'Broläggare' },
+        { keys: ['fältarbetspansarvagn','fältarbetsbandvagn'], dim:'G', equip:'120600', label:'Fältarbetsfordon' },
+        { keys: ['ledningsfordon','ledningspansarbil'],        dim:'G', equip:'120100', label:'Ledningsfordon' },
+        { keys: ['indikeringspansarvagn','indikeringspansarbil'], dim:'G', equip:'120700', label:'NBC-fordon' },
+        { keys: ['bandvagn','terränglastbil','lastbil'],       dim:'G', equip:'121100', label:'Transportfordon' },
+        { keys: ['amfibiebandvagn'],                           dim:'G', equip:'120502', label:'Amfibiebandvagn' },
+        { keys: ['stridsvagnsbärgare','stridsfordonsbärgare'], dim:'G', equip:'121100', label:'Bärgningsfordon' },
+        // ── Free-text fallbacks ───────────────────────────────────────────────
+        { keys: ['fallskärm','luftlandsätt'],                  dim:'A', equip:'1S0000', label:'Luftlandsättning' },
+        { keys: ['flygplan','jetmotor','propellermotor'],      dim:'A', equip:'110000', label:'Flygplan' },
+        { keys: ['trupp','infanteri','soldat','psky','pskv'],  dim:'G', equip:'121100', label:'Infanteri' },
+        { keys: ['minor','minering','fältarbete'],             dim:'G', equip:'120600', label:'Ingenjörtropp' },
+        { keys: ['radar','ew','elektronisk'],                  dim:'G', equip:'120100', label:'Radar/EW' },
+        { keys: ['kolumn','fordon','transport'],               dim:'G', equip:'121100', label:'Fordonskolumn' },
+    ];
+
+    // Build SIDC from components
+    // dim: G=ground(10), A=air(15), S=surface sea(30), U=subsurface(35)
+    const DIM_CODE = { G:'10', A:'15', S:'30', U:'35' };
+
+    function buildSIDC(dim, equip, aDigit) {
+        const d = DIM_CODE[dim] || '10';
+        if (dim === 'U') return `100${aDigit}35000010000000`;          // submarine
+        if (dim === 'S') return `100${aDigit}3000${equip}0000`;        // surface vessel
+        if (dim === 'A') return `100${aDigit}1500${equip}0000`;        // air
+        return `100${aDigit}1000${equip}0000`;                         // ground
+    }
+
+    // Look up equipment by searching all text fields
+    function lookupEquip(text) {
+        if (!text) return null;
+        const t = text.toLowerCase();
+        for (const row of EQUIP_TABLE) {
+            if (row.keys.some(k => t.includes(k.toLowerCase()))) return row;
+        }
+        return null;
+    }
+
+    // ── Affiliation detection ─────────────────────────────────────────────────
+    function getAffiliation(obs) {
+        const friendly = ['fors', 'sv ', 'sverige', 'nato', 'allied', 'allierad', 'blå', 'blue', 'egna'];
+        const hostile  = ['fiende', 'rysk', 'russia', 'obekant fiende', 'red', 'röd'];
+        const unknown  = ['okänd', 'unknown', 'ej identifierad'];
+        const haystack = [obs.från, obs.org, obs.bedömning, obs.kommentar, obs.info]
+            .filter(Boolean).join(' ').toLowerCase();
+        if (friendly.some(k => haystack.includes(k))) return 'F';
+        if (hostile.some(k  => haystack.includes(k))) return 'H';
+        if (unknown.some(k  => haystack.includes(k))) return 'U';
+        return 'H';
+    }
+
+    const AFFIL_DIGIT = { 'F': '3', 'H': '6', 'U': '4', 'N': '5' };
+
+    // ── Master classifier ──────────────────────────────────────────────────────
+    function classifyObservation(obs) {
+        const affil  = getAffiliation(obs);
+        const aDigit = AFFIL_DIGIT[affil] || '6';
+
+        let mtrl = (obs.mtrl || '').trim().replace(/^0$/, '');
+
+        // 1. Try exact designator match from mtrl field
+        let match = mtrl ? lookupEquip(mtrl) : null;
+
+        // 2. Try mtrl subgrupp (type category column)
+        if (!match && obs.mtrlSubgrupp) match = lookupEquip(obs.mtrlSubgrupp);
+
+        // 3. Scan free text: info + kommentar
+        if (!match) {
+            const freeText = [obs.info, obs.kommentar].filter(Boolean).join(' ');
+            match = lookupEquip(freeText);
+        }
+
+        if (match) {
+            if (!mtrl) mtrl = match.label;
+            return { mtrl, sidc: buildSIDC(match.dim, match.equip, aDigit) };
+        }
+
+        // 4. Nothing matched — unknown ground unit
+        return { mtrl, sidc: `100${aDigit}1000100000000000` };
+    }
+
+    // Legacy wrapper
+    function getAutoSIDC(mtrl, obs) {
+        const fakeObs = obs || { mtrl, info: '', kommentar: '', mtrlSubgrupp: '', från: '', org: '', bedömning: '' };
+        if (!obs) fakeObs.mtrl = mtrl;
+        return classifyObservation(fakeObs).sidc;
+    }
 
     // Parse TNR (tidsnummer: DDHHMM) to timestamp
     function parseTNR(tnrStr) {
@@ -537,31 +706,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         return new Date(now.getFullYear(), now.getMonth(), dd, hh, mm, 0);
     }
 
-    function getAutoSIDC(mtrl) {
-        if (!mtrl) return "10061000001000000000";
-        const m = mtrl.toLowerCase();
 
-        // Check known SIDC codes first
-        for (const [key, sidc] of Object.entries(knownSIDCs)) {
-            if (m.includes(key)) return sidc;
-        }
-
-        let base = "1006100000";
-        let suffix = "0000000000";
-
-        if (m.includes("pansarskytte") || m.includes("btr") || m.includes("pansarterrängbil") || m.includes("amfibiebandvagn")) return base + "120502" + suffix;
-        if (m.includes("artilleri") || m.includes("granatkastare")) return base + "120300" + suffix;
-        if (m.includes("luftvärn")) return base + "120400" + suffix;
-        if (m.includes("helikopter")) return "10061500001100000000";
-        if (m.includes("flygplan")) return "10061500001200000000";
-        if (m.includes("ubåt") || m.includes("fartyg") || m.includes("minröjningsfartyg")) return "10063000001000000000";
-        if (m.includes("ledning") || m.includes("radar")) return base + "120100" + suffix;
-        if (m.includes("ingenjör") || m.includes("bro") || m.includes("fältarbet") || m.includes("minröjnings")) return base + "120600" + suffix;
-        if (m.includes("lastbil") || m.includes("transport") || m.includes("personbil")) return base + "121100" + suffix;
-        if (m.includes("uav") || m.includes("ugv") || m.includes("u(c)v")) return base + "121200" + suffix;
-
-        return base + "100000" + suffix;
-    }
 
     // Load observations from sessionStorage
     function loadObservations() {
@@ -587,13 +732,22 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         let imported = 0;
 
         input.split('\n').forEach(line => {
-            const parts = line.split('\t');
+            const parts = line.split('\t').map(p => p.trim());
             if (parts.length >= 5) {
                 // 0=Löpnummer, 1=TNR, 2=Koordinater, 3=Plats,
                 // 4=Informationselement, 5=KOMMENTAR, 6=Från, 7=Typ,
                 // 8=Org, 9=Mtrl, 10=Mtrl subgrupp, 11=Tillförlitlighet,
                 // 12=Sakriktighet, 13=Referenser, 14=BEDÖMNING
-                const mtrlType = parts[9] || "";
+                const mtrlType = (parts[9] || "").trim().replace(/^0$/, "");
+                const tempObs = {
+                    mtrl:      mtrlType,
+                    info:      parts[4]  || "",
+                    kommentar: parts[5]  || "",
+                    från:      parts[6]  || "",
+                    org:       parts[8]  || "",
+                    bedömning: parts[14] || "",
+                };
+                const classified = classifyObservation(tempObs);
                 observations.push({
                     uid: Date.now() + Math.random(),
                     lopnummer:        parts[0]  || "NY",
@@ -605,13 +759,13 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
                     från:             parts[6]  || "",
                     typ:              parts[7]  || "",
                     org:              parts[8]  || "",
-                    mtrl:             mtrlType,
+                    mtrl:             classified.mtrl || mtrlType,
                     mtrlSubgrupp:     parts[10] || "",
                     tillförlitlighet: parts[11] || "",
                     sakriktighet:     parts[12] || "",
                     referenser:       parts[13] || "",
                     bedömning:        parts[14] || "",
-                    sidc: getAutoSIDC(mtrlType),
+                    sidc: classified.sidc,
                     timestamp: parseTNR(parts[1])
                 });
                 imported++;
@@ -665,7 +819,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
     function updateStats() {
         const obs = loadObservations();
         const mtrlTypes = new Set(obs.map(o => o.mtrl).filter(Boolean));
-        const withPos = obs.filter(o => o.pos).length;
+        const withPos = obs.filter(o => o.koordinater || o.pos).length;
         const orgs = new Set(obs.map(o => o.org).filter(Boolean));
 
         const stats = document.querySelectorAll('.stat-value');
@@ -687,11 +841,11 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
 
         listDiv.innerHTML = obs.map((o, i) => `
             <div class="obs-item">
-                <div class="obs-item-title">#${o.lopnummer} — ${o.mtrl || 'Okänd'}</div>
+                <div class="obs-item-title">#${o.lopnummer} — ${o.mtrl || o.typ || 'Okänd'}</div>
                 <div class="obs-item-info">
-                    <div>TNR: ${o.tnr} | Org: ${o.org} | Pos: ${o.pos || 'N/A'}</div>
-                    <div>${o.info}</div>
-                    <div>SIDC: ${o.sidc}</div>
+                    <div>TNR: ${o.tnr} | Från: ${o.från || '-'} | Plats: ${o.pos || '-'}</div>
+                    <div>Koord: ${o.koordinater || 'N/A'}</div>
+                    <div>${o.info || ''}</div>
                 </div>
                 <div class="obs-item-actions">
                     <button class="btn-secondary" onclick="editObs(${i})" style="flex: 1;">✏️ Redigera</button>
@@ -753,7 +907,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         const mtrl = document.getElementById('edit-mtrl').value;
         const sidcInput = document.getElementById('edit-sidc').value.trim();
 
-        obs[currentEditIndex] = {
+        const editedObs = {
             ...o,
             lopnummer:       document.getElementById('edit-lopnummer').value,
             tnr:             document.getElementById('edit-tnr').value,
@@ -765,12 +919,20 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
             mtrlSubgrupp:    document.getElementById('edit-mtrlSubgrupp').value,
             tillförlitlighet: document.getElementById('edit-tillforlitlighet').value,
             sakriktighet:    document.getElementById('edit-sakriktighet').value,
-            sidc:            sidcInput || getAutoSIDC(mtrl),
             referenser:      document.getElementById('edit-referenser').value,
             kommentar:       document.getElementById('edit-kommentar').value,
             bedömning:       document.getElementById('edit-bedömning').value,
             timestamp:       parseTNR(document.getElementById('edit-tnr').value),
         };
+        // Re-classify unless user manually set a SIDC
+        if (sidcInput) {
+            editedObs.sidc = sidcInput;
+        } else {
+            const reclassified = classifyObservation(editedObs);
+            editedObs.mtrl = editedObs.mtrl || reclassified.mtrl;
+            editedObs.sidc = reclassified.sidc;
+        }
+        obs[currentEditIndex] = editedObs;
 
         saveObservations(obs);
         closeModal();
