@@ -382,7 +382,7 @@
         <div class="panel">
             <h2 data-icon="📥">Importera Data</h2>
             <textarea id="csvInput" placeholder="Klistra in rader från Excel...
-Format: Löpnummer	TNR	Från	Informationselement	Plats	Org	Mtrl	Mtrl subgrupp	Tillförlitlighet	Sakriktighet	Referenser	KOMMENTAR	BEDÖMNING"></textarea>
+Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ	Org	Mtrl	Mtrl subgrupp	Tillförlitlighet	Sakriktighet	Referenser	BEDÖMNING"></textarea>
             <div class="button-group">
                 <button class="btn-primary" onclick="importData()">➕ Importera</button>
                 <button class="btn-secondary" onclick="loadSampleData()">📋 Ladda exempel</button>
@@ -586,23 +586,29 @@ Format: Löpnummer	TNR	Från	Informationselement	Plats	Org	Mtrl	Mtrl subgrupp	Ti
 
         input.split('\n').forEach(line => {
             const parts = line.split('\t');
-            if (parts.length >= 7) {
-                const mtrlType = parts[6] || "";
+            if (parts.length >= 5) {
+                // 0=Löpnummer, 1=TNR, 2=Koordinater, 3=Plats,
+                // 4=Informationselement, 5=KOMMENTAR, 6=Från, 7=Typ,
+                // 8=Org, 9=Mtrl, 10=Mtrl subgrupp, 11=Tillförlitlighet,
+                // 12=Sakriktighet, 13=Referenser, 14=BEDÖMNING
+                const mtrlType = parts[9] || "";
                 observations.push({
                     uid: Date.now() + Math.random(),
-                    lopnummer: parts[0] || "NY",
-                    tnr: parts[1] || "",
-                    från: parts[2] || "",
-                    info: parts[3] || "",
-                    pos: parts[4] || "",
-                    org: parts[5] || "",
-                    mtrl: mtrlType,
-                    mtrlSubgrupp: parts[7] || "",
-                    tillförlitlighet: parts[8] || "",
-                    sakriktighet: parts[9] || "",
-                    referenser: parts[10] || "",
-                    kommentar: parts[11] || "",
-                    bedömning: parts[12] || "",
+                    lopnummer:        parts[0]  || "NY",
+                    tnr:              parts[1]  || "",
+                    koordinater:      parts[2]  || "",
+                    pos:              parts[3]  || "",
+                    info:             parts[4]  || "",
+                    kommentar:        parts[5]  || "",
+                    från:             parts[6]  || "",
+                    typ:              parts[7]  || "",
+                    org:              parts[8]  || "",
+                    mtrl:             mtrlType,
+                    mtrlSubgrupp:     parts[10] || "",
+                    tillförlitlighet: parts[11] || "",
+                    sakriktighet:     parts[12] || "",
+                    referenser:       parts[13] || "",
+                    bedömning:        parts[14] || "",
                     sidc: getAutoSIDC(mtrlType),
                     timestamp: parseTNR(parts[1])
                 });
@@ -617,9 +623,9 @@ Format: Löpnummer	TNR	Från	Informationselement	Plats	Org	Mtrl	Mtrl subgrupp	Ti
 
     // Load sample data
     function loadSampleData() {
-        const sample = `1	130610	Spanare	Stridsvagn vid väg	32VNL5050	Nord	Stridsvagn	Huvudtyp	Hög	Hög	TV1	Test observation	Bekräftad
-2	130615	Spaning	Pansarskyttevagn i position	32VNL5100	Nord	Pansarskyttevagn	Personellarmat	Medel	Medel	TV2	Andraobservation	Sannolik
-3	130620	UAV	Raketartilleri uppmärksammat	32VNL5200	Väst	Raketartilleri	Markbunden	Höga	Höga	TV3	Tredje observation	Bekräftad`;
+        const sample = `1	130610	32VNL5050	Väg 62	Stridsvagn observerad vid väg	Rörde sig norrut	Spanar	Mark	Nord	Stridsvagn	Huvudtyp	Hög	Hög	TV1	Bekräftad
+2	130615	32VNL5100	Skogskant	Pansarskyttevagn i position	Stationär	Spaning	Mark	Nord	Pansarskyttevagn	Personellarmat	Medel	Medel	TV2	Sannolik
+3	130620	32VNL5200	Fält	Raketartilleri uppmärksammat	Avfyrade mot öst	UAV	Mark	Väst	Raketartilleri	Markbunden	Hög	Hög	TV3	Bekräftad`;
 
         document.getElementById('csvInput').value = sample;
         showMessage('Exempeldata laddat', 'info');
