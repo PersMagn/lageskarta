@@ -435,8 +435,10 @@
                     <br><small style="color:#666">${obs.info}</small>
                 </div>
                 <div class="edit-group">
-                    <label>Position (MGRS)</label>
-                    <input type="text" value="${obs.pos}" onchange="updateField(${originalIndex}, 'pos', this.value)">
+                    <label>Koordinat (MGRS)</label>
+                    <input type="text" value="${obs.koordinater || ''}" onchange="updateField(${originalIndex}, 'koordinater', this.value)">
+                    <label>Plats</label>
+                    <input type="text" value="${obs.pos || ''}" onchange="updateField(${originalIndex}, 'pos', this.value)">
                     <label>SIDC (Symbolkod)</label>
                     <input type="text" value="${obs.sidc}" onchange="updateField(${originalIndex}, 'sidc', this.value)">
                 </div>
@@ -458,7 +460,7 @@
         const visibleObs = filterObservationsByTime();
         const posGroups = {};
         visibleObs.forEach(obs => {
-            const actualCoords = getCoords(obs.pos);
+            const actualCoords = getCoords(obs.koordinater || obs.pos);
             if (!actualCoords) return;
             const key = actualCoords.toString();
             if (!posGroups[key]) posGroups[key] = [];
@@ -503,7 +505,7 @@
     }
 
     function goTo(index) {
-        const coords = getCoords(observations[index].pos);
+        const coords = getCoords(observations[index].koordinater || observations[index].pos);
         if(coords) map.flyTo(coords, 13);
     }
 
