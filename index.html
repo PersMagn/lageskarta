@@ -612,7 +612,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         { keys: ['amfibiebandvagn'],                           dim:'G', equip:'120502', label:'Amfibiebandvagn' },
         { keys: ['stridsvagnsbärgare','stridsfordonsbärgare'], dim:'G', equip:'121100', label:'Bärgningsfordon' },
         // ── Free-text fallbacks ───────────────────────────────────────────────
-        { keys: ['fallskärm','luftlandsätt'],                  dim:'G', equip:'121100', label:'Luftlandsättning' },
+        { keys: ['fallskärm','luftlandsätt'],                  dim:'A', equip:'1S0000', label:'Luftlandsättning' },
         { keys: ['flygplan','jetmotor','propellermotor'],      dim:'A', equip:'110000', label:'Flygplan' },
         { keys: ['trupp','infanteri','soldat','psky','pskv'],  dim:'G', equip:'121100', label:'Infanteri' },
         { keys: ['minor','minering','fältarbete'],             dim:'G', equip:'120600', label:'Ingenjörtropp' },
@@ -658,21 +658,10 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
     }
 
     // ── Affiliation detection ─────────────────────────────────────────────────
-    // Report types that indicate HOSTILE subject (what is being observed is enemy)
-    const HOSTILE_REPORT_TYPES = ['7s'];
-
-    // Report types that indicate FRIENDLY subject
-    const FRIENDLY_REPORT_TYPES = ['fors', 'pur'];
-
     function getAffiliation(obs) {
-        // typ is the ONLY field that determines affiliation
-        if (obs.typ) {
-            const t = obs.typ.trim().toLowerCase();
-            if (HOSTILE_REPORT_TYPES.some(k  => t === k)) return 'H';
-            if (FRIENDLY_REPORT_TYPES.some(k => t === k)) return 'F';
-        }
-        // All other report types → unknown
-        return 'U';
+        // 7S = hostile, everything else = friendly
+        if (obs.typ && obs.typ.trim().toLowerCase() === '7s') return 'H';
+        return 'F';
     }
 
     const AFFIL_DIGIT = { 'F': '3', 'H': '6', 'U': '4', 'N': '5' };
