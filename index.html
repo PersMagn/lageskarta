@@ -621,26 +621,28 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
     ];
 
     // Mapping Dimension to Symbol Set (Digits 5-6)
-    const SYMBOL_SET = { 
-        'G_UNIT': '10', // Land Unit
-        'G_EQUIP': '15', // Land Equipment
-        'A': '01',       // Air
-        'S': '30',       // Surface
-        'U': '35'        // Subsurface
+    // APP-6D / milsymbol 2.0 symbol sets
+    // Format: 10 [context:1] [affil:1] [symset:2] [status:2] [hqtffd:2] [entity:6] [mod1:2] [mod2:2]
+    // Total: 20 characters
+    const SYMBOL_SET = {
+        'G':  '10',  // Land unit/equipment
+        'A':  '01',  // Air
+        'S':  '30',  // Surface (sea)
+        'U':  '35',  // Subsurface
     };
 
-    function buildSIDC(dimKey, equip, aDigit) {
-        const version = "10";
-        const context = "0"; // 0 = Reality
-        const affiliation = aDigit;
-        const symbolSet = SYMBOL_SET[dimKey] || '10';
-        const status = "00"; // Present
-        const hq_tf_fd = "00"; // HQTFFD
-        const entity = equip.padEnd(6, '0');
-        const mod1 = "00";
-        const mod2 = "00";
+    // APP-6D entity codes per symbol set
+    // Air (01): 110000=rotary wing, 120000=fixed wing, 110200=attack helo, 110100=transport helo
+    // Ground (10): 120500=armour, 120502=APC/IFV, 120300=fires, 120400=air defence,
+    //              120100=C2/radar, 120600=engineer, 121100=logistics, 121200=UAS/UGV
+    // Surface (30): 120100=combatant, 120200=amphibious, 120500=mine warfare
+    // Subsurface (35): 110000=submarine
 
-        return `${version}${context}${affiliation}${symbolSet}${status}${hq_tf_fd}${entity}${mod1}${mod2}`;
+    function buildSIDC(dimKey, equip, aDigit) {
+        const symset = SYMBOL_SET[dimKey] || '10';
+        // entity must be exactly 6 chars
+        const entity = (equip || '100000').toString().padEnd(6, '0').substring(0, 6);
+        return `100${aDigit}${symset}0000${entity}0000`;
     }
 
     // Build SIDC from components
@@ -697,7 +699,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         }
 
         // 4. Nothing matched — unknown ground unit
-        return { mtrl, sidc: `100${aDigit}1000100000000000` };
+        return { mtrl, sidc: buildSIDC('G', '100000', aDigit) };
     }
 
     // Legacy wrapper
