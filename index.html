@@ -612,7 +612,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         { keys: ['amfibiebandvagn'],                           dim:'G', equip:'120502', label:'Amfibiebandvagn' },
         { keys: ['stridsvagnsbärgare','stridsfordonsbärgare'], dim:'G', equip:'121100', label:'Bärgningsfordon' },
         // ── Free-text fallbacks ───────────────────────────────────────────────
-        { keys: ['fallskärm','luftlandsätt'],                  dim:'A', equip:'1S0000', label:'Luftlandsättning' },
+        { keys: ['fallskärm','luftlandsätt'],                  dim:'G', equip:'121100', label:'Luftlandsättning' },
         { keys: ['flygplan','jetmotor','propellermotor'],      dim:'A', equip:'110000', label:'Flygplan' },
         { keys: ['trupp','infanteri','soldat','psky','pskv'],  dim:'G', equip:'121100', label:'Infanteri' },
         { keys: ['minor','minering','fältarbete'],             dim:'G', equip:'120600', label:'Ingenjörtropp' },
@@ -621,28 +621,26 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
     ];
 
     // Mapping Dimension to Symbol Set (Digits 5-6)
-    // APP-6D / milsymbol 2.0 symbol sets
-    // Format: 10 [context:1] [affil:1] [symset:2] [status:2] [hqtffd:2] [entity:6] [mod1:2] [mod2:2]
-    // Total: 20 characters
-    const SYMBOL_SET = {
-        'G':  '10',  // Land unit/equipment
-        'A':  '01',  // Air
-        'S':  '30',  // Surface (sea)
-        'U':  '35',  // Subsurface
+    const SYMBOL_SET = { 
+        'G_UNIT': '10', // Land Unit
+        'G_EQUIP': '15', // Land Equipment
+        'A': '01',       // Air
+        'S': '30',       // Surface
+        'U': '35'        // Subsurface
     };
 
-    // APP-6D entity codes per symbol set
-    // Air (01): 110000=rotary wing, 120000=fixed wing, 110200=attack helo, 110100=transport helo
-    // Ground (10): 120500=armour, 120502=APC/IFV, 120300=fires, 120400=air defence,
-    //              120100=C2/radar, 120600=engineer, 121100=logistics, 121200=UAS/UGV
-    // Surface (30): 120100=combatant, 120200=amphibious, 120500=mine warfare
-    // Subsurface (35): 110000=submarine
-
     function buildSIDC(dimKey, equip, aDigit) {
-        const symset = SYMBOL_SET[dimKey] || '10';
-        // entity must be exactly 6 chars
-        const entity = (equip || '100000').toString().padEnd(6, '0').substring(0, 6);
-        return `100${aDigit}${symset}0000${entity}0000`;
+        const version = "10";
+        const context = "0"; // 0 = Reality
+        const affiliation = aDigit;
+        const symbolSet = SYMBOL_SET[dimKey] || '10';
+        const status = "00"; // Present
+        const hq_tf_fd = "00"; // HQTFFD
+        const entity = equip.padEnd(6, '0');
+        const mod1 = "00";
+        const mod2 = "00";
+
+        return `${version}${context}${affiliation}${symbolSet}${status}${hq_tf_fd}${entity}${mod1}${mod2}`;
     }
 
     // Build SIDC from components
@@ -660,16 +658,21 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
     }
 
     // ── Affiliation detection ─────────────────────────────────────────────────
+    // Report types that indicate HOSTILE subject (what is being observed is enemy)
+    const HOSTILE_REPORT_TYPES = ['7s'];
+
+    // Report types that indicate FRIENDLY subject
+    const FRIENDLY_REPORT_TYPES = ['fors', 'pur'];
+
     function getAffiliation(obs) {
-        const friendly = ['fors', 'sv ', 'sverige', 'nato', 'allied', 'allierad', 'blå', 'blue', 'egna'];
-        const hostile  = ['fiende', 'rysk', 'russia', 'obekant fiende', 'red', 'röd'];
-        const unknown  = ['okänd', 'unknown', 'ej identifierad'];
-        const haystack = [obs.från, obs.org, obs.bedömning, obs.kommentar, obs.info]
-            .filter(Boolean).join(' ').toLowerCase();
-        if (friendly.some(k => haystack.includes(k))) return 'F';
-        if (hostile.some(k  => haystack.includes(k))) return 'H';
-        if (unknown.some(k  => haystack.includes(k))) return 'U';
-        return 'H';
+        // typ is the ONLY field that determines affiliation
+        if (obs.typ) {
+            const t = obs.typ.trim().toLowerCase();
+            if (HOSTILE_REPORT_TYPES.some(k  => t === k)) return 'H';
+            if (FRIENDLY_REPORT_TYPES.some(k => t === k)) return 'F';
+        }
+        // All other report types → unknown
+        return 'U';
     }
 
     const AFFIL_DIGIT = { 'F': '3', 'H': '6', 'U': '4', 'N': '5' };
@@ -699,7 +702,7 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         }
 
         // 4. Nothing matched — unknown ground unit
-        return { mtrl, sidc: buildSIDC('G', '100000', aDigit) };
+        return { mtrl, sidc: `100${aDigit}1000100000000000` };
     }
 
     // Legacy wrapper
