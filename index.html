@@ -427,6 +427,22 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
         </div>
     </div>
 
+    <!-- GeoJSON Layers -->
+    <div class="panel">
+        <h2 data-icon="🗂️">Kartlager (GeoJSON)</h2>
+        <p style="font-size:13px; color:#aaa; margin-bottom:12px;">
+            Ladda upp GeoJSON-filer med gränser, linjer eller punkter. Lagren visas på kartan och sparas i sessionen.
+        </p>
+        <div class="button-group" style="margin-bottom:12px;">
+            <label class="btn-primary" style="cursor:pointer; display:inline-block;">
+                ＋ Ladda upp GeoJSON
+                <input type="file" id="geojsonUpload" accept=".geojson,.json" multiple style="display:none">
+            </label>
+            <button class="btn-danger" onclick="clearAllGeojson()">🗑️ Rensa lager</button>
+        </div>
+        <div id="geojsonIndexList" style="margin-top:8px;"></div>
+    </div>
+
     <!-- Navigation to Views -->
     <h2 style="margin-top: 40px; margin-bottom: 20px;">🗺️ Navigera till Vyer</h2>
     <div class="nav-grid">
@@ -975,6 +991,70 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
     // Initialize
     updateStats();
     renderList();
+
+    // ── GeoJSON layer management (stored in sessionStorage, rendered in map.html) ──
+    const GEOJSON_COLORS_IDX = ['#e63946','#2196F3','#ff9800','#9c27b0','#00bcd4',
+                                 '#4caf50','#ff5722','#607d8b','#795548','#009688'];
+
+    function loadGeojsonMeta() {
+        try { return JSON.parse(sessionStorage.getItem('geojson_layers') || '[]'); }
+        catch(e) { return []; }
+    }
+
+    function renderGeojsonIndexList() {
+        const el = document.getElementById('geojsonIndexList');
+        const layers = loadGeojsonMeta();
+        if (!layers.length) {
+            el.innerHTML = '<div style="font-size:13px;color:#666;padding:8px 0;">Inga GeoJSON-lager uppladdade.</div>';
+            return;
+        }
+        el.innerHTML = layers.map(function(l) {
+            const features = l.data && l.data.features ? l.data.features.length : 1;
+            return '<div style="display:flex;align-items:center;padding:6px 10px;background:#1e1e1e;border:1px solid #333;border-radius:5px;margin-bottom:5px;font-size:13px;">' +
+                '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + l.color + ';margin-right:8px;flex-shrink:0;"></span>' +
+                '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + l.name + '</span>' +
+                '<span style="color:#666;font-size:11px;margin-left:8px;">' + features + ' element</span>' +
+                '<button onclick="removeGeojsonById(' + l.id + ')" style="margin-left:10px;background:none;border:none;color:#c44;cursor:pointer;font-size:14px;" title="Ta bort">✕</button>' +
+                '</div>';
+        }).join('');
+    }
+
+    function removeGeojsonById(id) {
+        let layers = loadGeojsonMeta().filter(function(l) { return l.id !== id; });
+        sessionStorage.setItem('geojson_layers', JSON.stringify(layers));
+        renderGeojsonIndexList();
+        showMessage('Lager borttaget', 'info');
+    }
+
+    function clearAllGeojson() {
+        sessionStorage.removeItem('geojson_layers');
+        renderGeojsonIndexList();
+        showMessage('Alla kartlager rensade', 'info');
+    }
+
+    document.getElementById('geojsonUpload').addEventListener('change', function(e) {
+        let existing = loadGeojsonMeta();
+        Array.from(e.target.files).forEach(function(file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const geojson = JSON.parse(evt.target.result);
+                    const color = GEOJSON_COLORS_IDX[existing.length % GEOJSON_COLORS_IDX.length];
+                    const name = file.name.replace(/\.(geojson|json)$/i, '');
+                    existing.push({ id: Date.now() + Math.random(), name: name, color: color, visible: true, data: geojson });
+                    sessionStorage.setItem('geojson_layers', JSON.stringify(existing));
+                    renderGeojsonIndexList();
+                    showMessage(name + ' laddat (' + (geojson.features ? geojson.features.length : 1) + ' element)', 'success');
+                } catch(err) {
+                    showMessage('Fel: ' + err.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+        });
+        this.value = '';
+    });
+
+    renderGeojsonIndexList();
 </script>
 
 </body>

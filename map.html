@@ -72,6 +72,25 @@
         textarea { width: 100%; height: 60px; margin-bottom: 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; padding: 5px; box-sizing: border-box; }
         .obs-list { flex-grow: 1; overflow-y: auto; margin-top: 15px; }
 
+        /* GeoJSON layer panel */
+        .geojson-panel { border-top: 1px solid #ddd; padding-top: 10px; margin-top: 8px; flex-shrink: 0; }
+        .geojson-panel h4 { margin: 0 0 8px; font-size: 13px; color: #444; }
+        .geojson-upload-btn {
+            display: inline-block; padding: 6px 12px; background: #28a745; color: white;
+            border-radius: 4px; font-size: 12px; cursor: pointer; border: none; width: 100%;
+            text-align: center; margin-bottom: 6px;
+        }
+        .geojson-upload-btn:hover { background: #1e7e34; }
+        .geojson-layer-item {
+            display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+            background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;
+            margin-bottom: 4px; font-size: 12px;
+        }
+        .geojson-layer-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .geojson-layer-toggle { cursor: pointer; font-size: 14px; }
+        .geojson-layer-remove { cursor: pointer; color: #c00; font-size: 14px; margin-left: 2px; }
+        .geojson-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
         .obs-item {
             background: #fff; border: 1px solid #ddd; padding: 12px; margin-bottom: 10px;
             border-radius: 6px; font-size: 13px;
@@ -223,6 +242,15 @@
             </div>
 
             <div class="obs-list" id="obsList"></div>
+
+            <div class="geojson-panel">
+                <h4>🗂️ GeoJSON-lager</h4>
+                <label class="geojson-upload-btn">
+                    ＋ Ladda upp GeoJSON
+                    <input type="file" id="geojsonFileInput" accept=".geojson,.json" multiple style="display:none">
+                </label>
+                <div id="geojsonLayerList"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -648,6 +676,142 @@
         isDraggingTrack = false;
         sliderTrackActive.style.cursor = 'grab';
     });
+
+    // ── GeoJSON layer management ──────────────────────────────────────────────
+    const GEOJSON_COLORS = ['#e63946','#2196F3','#ff9800','#9c27b0','#00bcd4',
+                             '#4caf50','#ff5722','#607d8b','#795548','#009688'];
+    let geojsonLayers = [];
+
+    function styleForGeojson(feature, color) {
+        const t = (feature.geometry || {}).type || '';
+        if (t === 'Point' || t === 'MultiPoint') return {};
+        return { color: color, weight: 2.5, opacity: 0.9, fillOpacity: 0.12, fillColor: color };
+    }
+
+    function pointToLayerFn(color) {
+        return function(feature, latlng) {
+            const props = feature.properties || {};
+            const name = props.name || props.NAME || props.label || props.LABEL || '';
+            if (name) {
+                const icon = L.divIcon({
+                    className: '',
+                    html: '<div style="background:' + color + ';color:#fff;padding:2px 6px;border-radius:3px;' +
+                          'font-size:11px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.5);font-weight:600;">' + name + '</div>',
+                    iconAnchor: [0, 10]
+                });
+                return L.marker(latlng, { icon: icon });
+            }
+            return L.circleMarker(latlng, {
+                radius: 5, color: color, fillColor: color, fillOpacity: 0.85, weight: 1.5
+            });
+        };
+    }
+
+    function onEachFeatureFn(feature, layer) {
+        const props = feature.properties;
+        if (!props) return;
+        const lines = Object.entries(props)
+            .filter(function(kv) { return kv[1] != null && kv[1] !== ''; })
+            .map(function(kv) { return '<b>' + kv[0] + ':</b> ' + kv[1]; });
+        if (lines.length) layer.bindPopup(lines.join('<br>'));
+    }
+
+    function addGeojsonLayer(name, geojsonData, color) {
+        const id = Date.now() + Math.random();
+        const layer = L.geoJSON(geojsonData, {
+            style: function(f) { return styleForGeojson(f, color); },
+            pointToLayer: pointToLayerFn(color),
+            onEachFeature: onEachFeatureFn
+        }).addTo(map);
+        geojsonLayers.push({ id: id, name: name, color: color, visible: true, layer: layer, data: geojsonData });
+        saveGeojsonToSession();
+        renderGeojsonList();
+        try {
+            const b = layer.getBounds();
+            if (b.isValid()) map.fitBounds(b, { padding: [40, 40], maxZoom: 14 });
+        } catch(e) {}
+    }
+
+    function removeGeojsonLayer(id) {
+        const idx = geojsonLayers.findIndex(function(l) { return l.id === id; });
+        if (idx === -1) return;
+        map.removeLayer(geojsonLayers[idx].layer);
+        geojsonLayers.splice(idx, 1);
+        saveGeojsonToSession();
+        renderGeojsonList();
+    }
+
+    function toggleGeojsonLayer(id) {
+        const item = geojsonLayers.find(function(l) { return l.id === id; });
+        if (!item) return;
+        if (item.visible) { map.removeLayer(item.layer); item.visible = false; }
+        else { item.layer.addTo(map); item.visible = true; }
+        saveGeojsonToSession();
+        renderGeojsonList();
+    }
+
+    function renderGeojsonList() {
+        const el = document.getElementById('geojsonLayerList');
+        if (!geojsonLayers.length) {
+            el.innerHTML = '<div style="font-size:11px;color:#999;padding:4px 0;">Inga lager uppladdade</div>';
+            return;
+        }
+        el.innerHTML = geojsonLayers.map(function(item) {
+            return '<div class="geojson-layer-item">' +
+                '<div class="geojson-color-dot" style="background:' + item.color + '"></div>' +
+                '<span title="' + item.name + '">' + item.name + '</span>' +
+                '<span class="geojson-layer-toggle" onclick="toggleGeojsonLayer(' + item.id + ')" title="' + (item.visible ? 'Dölj' : 'Visa') + '">' + (item.visible ? '👁️' : '🚫') + '</span>' +
+                '<span class="geojson-layer-remove" onclick="removeGeojsonLayer(' + item.id + ')" title="Ta bort">✕</span>' +
+                '</div>';
+        }).join('');
+    }
+
+    function saveGeojsonToSession() {
+        try {
+            const data = geojsonLayers.map(function(l) {
+                return { id: l.id, name: l.name, color: l.color, visible: l.visible, data: l.data };
+            });
+            sessionStorage.setItem('geojson_layers', JSON.stringify(data));
+        } catch(e) {}
+    }
+
+    function loadGeojsonFromSession() {
+        try {
+            const raw = sessionStorage.getItem('geojson_layers');
+            if (!raw) return;
+            JSON.parse(raw).forEach(function(d) {
+                const layer = L.geoJSON(d.data, {
+                    style: function(f) { return styleForGeojson(f, d.color); },
+                    pointToLayer: pointToLayerFn(d.color),
+                    onEachFeature: onEachFeatureFn
+                });
+                if (d.visible) layer.addTo(map);
+                geojsonLayers.push({ id: d.id, name: d.name, color: d.color, visible: d.visible, layer: layer, data: d.data });
+            });
+            renderGeojsonList();
+        } catch(e) {}
+    }
+
+    document.getElementById('geojsonFileInput').addEventListener('change', function(e) {
+        Array.from(e.target.files).forEach(function(file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const geojson = JSON.parse(evt.target.result);
+                    const color = GEOJSON_COLORS[geojsonLayers.length % GEOJSON_COLORS.length];
+                    addGeojsonLayer(file.name.replace(/\.(geojson|json)$/i, ''), geojson, color);
+                } catch(err) {
+                    alert('Kunde inte läsa ' + file.name + ': ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        });
+        this.value = '';
+    });
+
+    loadGeojsonFromSession();
+    renderGeojsonList();
+
 </script>
 
 </body>
