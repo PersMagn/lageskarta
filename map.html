@@ -685,7 +685,13 @@
     function styleForGeojson(feature, color) {
         const t = (feature.geometry || {}).type || '';
         if (t === 'Point' || t === 'MultiPoint') return {};
-        return { color: color, weight: 2.5, opacity: 0.9, fillOpacity: 0.12, fillColor: color };
+        const typ = ((feature.properties || {}).typ || '').toLowerCase();
+        const dashed = typ.includes('suav') || typ.includes('streckad') || typ.includes('dashed');
+        return {
+            color: color, weight: 2.5, opacity: 0.9,
+            fillOpacity: dashed ? 0.05 : 0.12, fillColor: color,
+            dashArray: dashed ? '8 6' : null
+        };
     }
 
     // Normalise SIDC: truncate 30-char APP-6B to 20-char APP-6D
