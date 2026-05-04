@@ -688,9 +688,17 @@
         return { color: color, weight: 2.5, opacity: 0.9, fillOpacity: 0.12, fillColor: color };
     }
 
-    // Build a milsymbol marker
+    // Normalise SIDC: truncate 30-char APP-6B to 20-char APP-6D
+    function normaliseSIDC(raw) {
+        if (!raw) return '';
+        const s = raw.trim();
+        if (s.length === 30) return s.substring(0, 20);
+        return s;
+    }
+
+    // Build a milsymbol marker from a 20-char APP-6D SIDC
     function milsymbolMarker(sidc, latlng, extraOpts) {
-        const sym = new ms.Symbol(sidc, Object.assign({ size: 30 }, extraOpts || {}));
+        const sym = new ms.Symbol(normaliseSIDC(sidc), Object.assign({ size: 30 }, extraOpts || {}));
         const anchor = sym.getAnchor();
         const icon = L.divIcon({
             className: '',
@@ -701,67 +709,85 @@
         return L.marker(latlng, { icon: icon });
     }
 
+    // Render a single point given props + latlng
+    function renderSinglePoint(props, latlng, color) {
+        const sidc  = props.sidc || props.SIDC || props.symbolcode || props.symbol_id || '';
+        const typ   = (props.typ || props.type || props.TYPE || props.kategori || '').toLowerCase().trim();
+        const name  = props.name || props.NAME || props.label || props.LABEL || props.designationuniq || '';
+        const desig = props.designationuniq || props.uid || name || '';
+
+        // ── 1. Explicit SIDC ──────────────────────────────────────────────────
+        if (sidc) {
+            try {
+                return milsymbolMarker(sidc, latlng, {
+                    uniqueDesignation: desig,
+                    additionalInformation: props.info || '',
+                    higherFormation: props.higherFormation || ''
+                });
+            } catch(e) {
+                console.warn('GeoJSON milsymbol error for SIDC ' + sidc + ':', e.message);
+            }
+        }
+
+        // ── 2. typ-based symbols ──────────────────────────────────────────────
+        if (typ === 'oplats' || typ === 'op') {
+            const icon = L.divIcon({
+                className: '',
+                html: '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">' +
+                      '<polygon points="8,1 15,15 1,15" fill="' + color + '" stroke="#fff" stroke-width="1.2"/></svg>',
+                iconSize: [16, 16],
+                iconAnchor: [8, 15]
+            });
+            return L.marker(latlng, { icon: icon });
+        }
+
+        if (typ === 'uav' || typ === 'suav' || typ === 'drone') {
+            try {
+                return milsymbolMarker('10031500001212000000', latlng, { uniqueDesignation: desig });
+            } catch(e) {}
+        }
+
+        // ── 3. Named label ────────────────────────────────────────────────────
+        if (name) {
+            const icon = L.divIcon({
+                className: '',
+                html: '<div style="background:' + color + ';color:#fff;padding:2px 6px;border-radius:3px;' +
+                      'font-size:11px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.5);font-weight:600;">' + name + '</div>',
+                iconAnchor: [0, 10]
+            });
+            return L.marker(latlng, { icon: icon });
+        }
+
+        // ── 4. Circle fallback ────────────────────────────────────────────────
+        return L.circleMarker(latlng, {
+            radius: 5, color: color, fillColor: color, fillOpacity: 0.85, weight: 1.5
+        });
+    }
+
     function pointToLayerFn(color) {
         return function(feature, latlng) {
+            return renderSinglePoint(feature.properties || {}, latlng, color);
+        };
+    }
+
+    // Leaflet doesn't call pointToLayer for MultiPoint — handle it in onEachFeature
+    function onEachFeatureFnWithMultiPoint(color) {
+        return function(feature, layer) {
             const props = feature.properties || {};
-            const sidc  = props.sidc || props.SIDC || props.symbolcode || props.symbol_id || '';
-            const type  = (props.type || props.TYPE || props.kategori || '').toLowerCase().trim();
-            const name  = props.name || props.NAME || props.label || props.LABEL || props.designationuniq || '';
-            const desig = props.designationuniq || props.uid || name || '';
 
-            // ── 1. Explicit SIDC in properties ────────────────────────────────
-            if (sidc) {
-                try {
-                    return milsymbolMarker(sidc, latlng, {
-                        uniqueDesignation: desig,
-                        additionalInformation: props.info || '',
-                        higherFormation: props.higherFormation || ''
-                    });
-                } catch(e) {
-                    console.warn('GeoJSON milsymbol error for SIDC ' + sidc + ':', e.message);
-                }
-            }
-
-            // ── 2. Type-based symbols ─────────────────────────────────────────
-            // Oplats (observation post) → small filled triangle
-            if (type === 'oplats' || type === 'op' || type === 'observation post') {
-                const icon = L.divIcon({
-                    className: '',
-                    html: '<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">' +
-                          '<polygon points="9,1 17,17 1,17" fill="' + color + '" stroke="#fff" stroke-width="1.5"/>' +
-                          (name ? '</svg><div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);' +
-                          'font-size:10px;color:#333;white-space:nowrap;font-weight:600;">' + name + '</div>' : '</svg>'),
-                    iconSize: [18, 18],
-                    iconAnchor: [9, 17]
+            // Expand MultiPoint into individual markers added to the map
+            if (feature.geometry && feature.geometry.type === 'MultiPoint') {
+                feature.geometry.coordinates.forEach(function(coord) {
+                    const latlng = L.latLng(coord[1], coord[0]);
+                    renderSinglePoint(props, latlng, color).addTo(map);
                 });
-                return L.marker(latlng, { icon: icon });
             }
 
-            // UAV / SUAV → milsymbol friendly UAV (10031500001212000000)
-            if (type === 'uav' || type === 'suav' || type === 'drone') {
-                try {
-                    // Friendly UAV: symset 01 (air), entity 121200
-                    return milsymbolMarker('10031500001212000000', latlng, {
-                        uniqueDesignation: desig
-                    });
-                } catch(e) { /* fall through */ }
-            }
-
-            // ── 3. Named label marker ─────────────────────────────────────────
-            if (name) {
-                const icon = L.divIcon({
-                    className: '',
-                    html: '<div style="background:' + color + ';color:#fff;padding:2px 6px;border-radius:3px;' +
-                          'font-size:11px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.5);font-weight:600;">' + name + '</div>',
-                    iconAnchor: [0, 10]
-                });
-                return L.marker(latlng, { icon: icon });
-            }
-
-            // ── 4. Plain circle fallback ──────────────────────────────────────
-            return L.circleMarker(latlng, {
-                radius: 5, color: color, fillColor: color, fillOpacity: 0.85, weight: 1.5
-            });
+            // Popup for all features
+            const lines = Object.entries(props)
+                .filter(function(kv) { return kv[1] != null && kv[1] !== ''; })
+                .map(function(kv) { return '<b>' + kv[0] + ':</b> ' + kv[1]; });
+            if (lines.length) layer.bindPopup(lines.join('<br>'));
         };
     }
 
@@ -779,7 +805,7 @@
         const layer = L.geoJSON(geojsonData, {
             style: function(f) { return styleForGeojson(f, color); },
             pointToLayer: pointToLayerFn(color),
-            onEachFeature: onEachFeatureFn
+            onEachFeature: onEachFeatureFnWithMultiPoint(color)
         }).addTo(map);
         geojsonLayers.push({ id: id, name: name, color: color, visible: true, layer: layer, data: geojsonData });
         saveGeojsonToSession();
@@ -841,7 +867,7 @@
                 const layer = L.geoJSON(d.data, {
                     style: function(f) { return styleForGeojson(f, d.color); },
                     pointToLayer: pointToLayerFn(d.color),
-                    onEachFeature: onEachFeatureFn
+                    onEachFeature: onEachFeatureFnWithMultiPoint(d.color)
                 });
                 if (d.visible) layer.addTo(map);
                 geojsonLayers.push({ id: d.id, name: d.name, color: d.color, visible: d.visible, layer: layer, data: d.data });
