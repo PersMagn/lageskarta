@@ -691,7 +691,34 @@
     function pointToLayerFn(color) {
         return function(feature, latlng) {
             const props = feature.properties || {};
-            const name = props.name || props.NAME || props.label || props.LABEL || '';
+            const sidc = props.sidc || props.SIDC || props.symbolcode || props.symbol_id || '';
+            const name = props.name || props.NAME || props.label || props.LABEL || props.designationuniq || '';
+
+            // ── Milsymbol if SIDC present ─────────────────────────────────────
+            if (sidc) {
+                try {
+                    const sym = new ms.Symbol(sidc, {
+                        size: 30,
+                        uniqueDesignation: props.designationuniq || props.uid || name || '',
+                        additionalInformation: props.info || props.additionalInformation || '',
+                        staffComments: props.staffComments || '',
+                        higherFormation: props.higherFormation || ''
+                    });
+                    const anchor = sym.getAnchor();
+                    const icon = L.divIcon({
+                        className: '',
+                        html: sym.asSVG(),
+                        iconSize: [sym.getSize().width, sym.getSize().height],
+                        iconAnchor: [anchor.x, anchor.y]
+                    });
+                    return L.marker(latlng, { icon: icon });
+                } catch(e) {
+                    console.warn('GeoJSON milsymbol error for SIDC ' + sidc + ':', e.message);
+                    // fall through to label/circle below
+                }
+            }
+
+            // ── Named label marker ────────────────────────────────────────────
             if (name) {
                 const icon = L.divIcon({
                     className: '',
@@ -701,6 +728,8 @@
                 });
                 return L.marker(latlng, { icon: icon });
             }
+
+            // ── Plain circle fallback ─────────────────────────────────────────
             return L.circleMarker(latlng, {
                 radius: 5, color: color, fillColor: color, fillOpacity: 0.85, weight: 1.5
             });
