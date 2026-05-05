@@ -777,15 +777,18 @@
     }
 
     // Leaflet doesn't call pointToLayer for MultiPoint — handle it in onEachFeature
-    function onEachFeatureFnWithMultiPoint(color) {
+    // Markers are added to the provided group so toggle/remove works correctly
+    function onEachFeatureFnWithMultiPoint(color, group) {
         return function(feature, layer) {
             const props = feature.properties || {};
 
-            // Expand MultiPoint into individual markers added to the map
+            // Expand MultiPoint into individual markers added to the group
             if (feature.geometry && feature.geometry.type === 'MultiPoint') {
                 feature.geometry.coordinates.forEach(function(coord) {
                     const latlng = L.latLng(coord[1], coord[0]);
-                    renderSinglePoint(props, latlng, color).addTo(map);
+                    const marker = renderSinglePoint(props, latlng, color);
+                    if (group) group.addLayer(marker);
+                    else marker.addTo(map);
                 });
             }
 
@@ -808,16 +811,20 @@
 
     function addGeojsonLayer(name, geojsonData, color) {
         const id = Date.now() + Math.random();
-        const layer = L.geoJSON(geojsonData, {
+        // Use a LayerGroup so MultiPoint markers are tracked together with the GeoJSON layer
+        const group = L.layerGroup();
+        const geojsonLayer = L.geoJSON(geojsonData, {
             style: function(f) { return styleForGeojson(f, color); },
             pointToLayer: pointToLayerFn(color),
-            onEachFeature: onEachFeatureFnWithMultiPoint(color)
-        }).addTo(map);
-        geojsonLayers.push({ id: id, name: name, color: color, visible: true, layer: layer, data: geojsonData });
+            onEachFeature: onEachFeatureFnWithMultiPoint(color, group)
+        });
+        group.addLayer(geojsonLayer);
+        group.addTo(map);
+        geojsonLayers.push({ id: id, name: name, color: color, visible: true, layer: group, data: geojsonData });
         saveGeojsonToSession();
         renderGeojsonList();
         try {
-            const b = layer.getBounds();
+            const b = geojsonLayer.getBounds();
             if (b.isValid()) map.fitBounds(b, { padding: [40, 40], maxZoom: 14 });
         } catch(e) {}
     }
@@ -870,13 +877,15 @@
             const raw = sessionStorage.getItem('geojson_layers');
             if (!raw) return;
             JSON.parse(raw).forEach(function(d) {
-                const layer = L.geoJSON(d.data, {
+                const group = L.layerGroup();
+                const geojsonLayer = L.geoJSON(d.data, {
                     style: function(f) { return styleForGeojson(f, d.color); },
                     pointToLayer: pointToLayerFn(d.color),
-                    onEachFeature: onEachFeatureFnWithMultiPoint(d.color)
+                    onEachFeature: onEachFeatureFnWithMultiPoint(d.color, group)
                 });
-                if (d.visible) layer.addTo(map);
-                geojsonLayers.push({ id: d.id, name: d.name, color: d.color, visible: d.visible, layer: layer, data: d.data });
+                group.addLayer(geojsonLayer);
+                if (d.visible) group.addTo(map);
+                geojsonLayers.push({ id: d.id, name: d.name, color: d.color, visible: d.visible, layer: group, data: d.data });
             });
             renderGeojsonList();
         } catch(e) {}
