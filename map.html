@@ -855,12 +855,33 @@
         }
         el.innerHTML = geojsonLayers.map(function(item) {
             return '<div class="geojson-layer-item">' +
-                '<div class="geojson-color-dot" style="background:' + item.color + '"></div>' +
+                '<input type="color" value="' + item.color + '" title="Ändra färg"' +
+                '  style="width:20px;height:20px;border:none;border-radius:50%;padding:0;cursor:pointer;flex-shrink:0;background:none;"' +
+                '  onchange="changeGeojsonColor(' + item.id + ', this.value)">' +
                 '<span title="' + item.name + '">' + item.name + '</span>' +
                 '<span class="geojson-layer-toggle" onclick="toggleGeojsonLayer(' + item.id + ')" title="' + (item.visible ? 'Dölj' : 'Visa') + '">' + (item.visible ? '👁️' : '🚫') + '</span>' +
                 '<span class="geojson-layer-remove" onclick="removeGeojsonLayer(' + item.id + ')" title="Ta bort">✕</span>' +
                 '</div>';
         }).join('');
+    }
+
+    function changeGeojsonColor(id, newColor) {
+        const item = geojsonLayers.find(function(l) { return l.id === id; });
+        if (!item) return;
+        item.color = newColor;
+        // Rebuild the layer with the new color
+        map.removeLayer(item.layer);
+        const group = L.layerGroup();
+        const geojsonLayer = L.geoJSON(item.data, {
+            style: function(f) { return styleForGeojson(f, newColor); },
+            pointToLayer: pointToLayerFn(newColor),
+            onEachFeature: onEachFeatureFnWithMultiPoint(newColor, group)
+        });
+        group.addLayer(geojsonLayer);
+        if (item.visible) group.addTo(map);
+        item.layer = group;
+        saveGeojsonToSession();
+        renderGeojsonList();
     }
 
     function saveGeojsonToSession() {
@@ -870,6 +891,31 @@
             });
             sessionStorage.setItem('geojson_layers', JSON.stringify(data));
         } catch(e) {}
+    }
+
+    function fitMapToAllObjects() {
+        const bounds = L.latLngBounds();
+        // Include observation markers
+        observations.forEach(function(o) {
+            const coords = getCoords(o.koordinater || o.pos);
+            if (coords) bounds.extend(coords);
+        });
+        // Include all GeoJSON layers
+        geojsonLayers.forEach(function(item) {
+            try {
+                // Walk through layer group to get bounds
+                item.layer.eachLayer(function(l) {
+                    if (l.getBounds) {
+                        try { bounds.extend(l.getBounds()); } catch(e) {}
+                    } else if (l.getLatLng) {
+                        bounds.extend(l.getLatLng());
+                    }
+                });
+            } catch(e) {}
+        });
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+        }
     }
 
     function loadGeojsonFromSession() {
@@ -910,6 +956,7 @@
 
     loadGeojsonFromSession();
     renderGeojsonList();
+    fitMapToAllObjects();
 
 </script>
 
