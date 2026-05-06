@@ -867,15 +867,53 @@
                 }
             }
 
-            // Popup with properties + MGRS at click location
+            // Popup with properties + all corner/vertex MGRS coordinates on click
             layer.on('click', function(e) {
-                const latlng = e.latlng;
-                const mgrsStr = latLngToMGRS(latlng.lat, latlng.lng);
+                const geom = feature.geometry || {};
+                const geomType = geom.type || '';
                 const lines = Object.entries(props)
                     .filter(function(kv) { return kv[1] != null && kv[1] !== ''; })
                     .map(function(kv) { return '<b>' + kv[0] + ':</b> ' + kv[1]; });
-                if (mgrsStr) lines.push('<span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + mgrsStr + '</span>');
-                if (lines.length) L.popup().setLatLng(latlng).setContent(lines.join('<br>')).openOn(map);
+
+                // Collect coordinates to display based on geometry type
+                function coordsForGeom(g) {
+                    if (!g) return [];
+                    if (g.type === 'Polygon')      return g.coordinates[0] || [];
+                    if (g.type === 'MultiPolygon') return g.coordinates[0][0] || [];
+                    if (g.type === 'LineString')   return g.coordinates || [];
+                    if (g.type === 'MultiLineString') return g.coordinates[0] || [];
+                    if (g.type === 'Circle')       return 'circle';
+                    return [];
+                }
+
+                const coords = coordsForGeom(geom);
+                if (coords === 'circle' || geomType === 'Circle') {
+                    // Circle: show centre
+                    const m = latLngToMGRS(e.latlng.lat, e.latlng.lng);
+                    if (m) lines.push('<b>Centrum:</b><br><span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + m + '</span>');
+                } else if (coords.length) {
+                    // Polygon/Line: show all unique vertices (skip closing duplicate)
+                    const unique = coords.filter(function(c, i) {
+                        if (i === coords.length - 1) {
+                            // skip if same as first (closing coord)
+                            return !(c[0] === coords[0][0] && c[1] === coords[0][1]);
+                        }
+                        return true;
+                    });
+                    const cornerLines = unique.map(function(c, i) {
+                        const m = latLngToMGRS(c[1], c[0]);
+                        return '<span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + (m || (c[1].toFixed(5) + ', ' + c[0].toFixed(5))) + '</span>';
+                    });
+                    if (cornerLines.length) {
+                        lines.push('<b>Hörn (' + cornerLines.length + '):</b><br>' + cornerLines.join('<br>'));
+                    }
+                } else {
+                    // Fallback: click location
+                    const m = latLngToMGRS(e.latlng.lat, e.latlng.lng);
+                    if (m) lines.push('<span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + m + '</span>');
+                }
+
+                if (lines.length) L.popup({ maxHeight: 300 }).setLatLng(e.latlng).setContent(lines.join('<br>')).openOn(map);
             });
         };
     }
