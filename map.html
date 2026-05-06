@@ -732,17 +732,28 @@
         return L.marker(latlng, { icon: icon });
     }
 
+    // Build popup content for a GeoJSON point
+    function pointPopupContent(props, latlng) {
+        const mgrsStr = latLngToMGRS(latlng.lat, latlng.lng);
+        const lines = Object.entries(props)
+            .filter(function(kv) { return kv[1] != null && kv[1] !== ''; })
+            .map(function(kv) { return '<b>' + kv[0] + ':</b> ' + kv[1]; });
+        if (mgrsStr) lines.push('<span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + mgrsStr + '</span>');
+        return lines.join('<br>');
+    }
+
     // Render a single point given props + latlng
     function renderSinglePoint(props, latlng, color) {
         const sidc  = props.sidc || props.SIDC || props.symbolcode || props.symbol_id || '';
         const typ   = (props.typ || props.type || props.TYPE || props.kategori || '').toLowerCase().trim();
         const name  = props.name || props.NAME || props.label || props.LABEL || props.designationuniq || '';
         const desig = props.designationuniq || props.uid || name || '';
+        let marker = null;
 
         // ── 1. Explicit SIDC ──────────────────────────────────────────────────
         if (sidc) {
             try {
-                return milsymbolMarker(sidc, latlng, {
+                marker = milsymbolMarker(sidc, latlng, {
                     uniqueDesignation: desig,
                     additionalInformation: props.info || '',
                     higherFormation: props.higherFormation || ''
@@ -753,7 +764,7 @@
         }
 
         // ── 2. typ-based symbols ──────────────────────────────────────────────
-        if (typ === 'oplats' || typ === 'op') {
+        if (!marker && (typ === 'oplats' || typ === 'op')) {
             const icon = L.divIcon({
                 className: '',
                 html: '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">' +
@@ -761,30 +772,36 @@
                 iconSize: [16, 16],
                 iconAnchor: [8, 15]
             });
-            return L.marker(latlng, { icon: icon });
+            marker = L.marker(latlng, { icon: icon });
         }
 
-        if (typ === 'uav' || typ === 'suav' || typ === 'drone') {
+        if (!marker && (typ === 'uav' || typ === 'suav' || typ === 'drone')) {
             try {
-                return milsymbolMarker('10031500001212000000', latlng, { uniqueDesignation: desig });
+                marker = milsymbolMarker('10031500001212000000', latlng, { uniqueDesignation: desig });
             } catch(e) {}
         }
 
         // ── 3. Named label ────────────────────────────────────────────────────
-        if (name) {
+        if (!marker && name) {
             const icon = L.divIcon({
                 className: '',
                 html: '<div style="background:' + color + ';color:#fff;padding:2px 6px;border-radius:3px;' +
                       'font-size:11px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.5);font-weight:600;">' + name + '</div>',
                 iconAnchor: [0, 10]
             });
-            return L.marker(latlng, { icon: icon });
+            marker = L.marker(latlng, { icon: icon });
         }
 
         // ── 4. Circle fallback ────────────────────────────────────────────────
-        return L.circleMarker(latlng, {
-            radius: 5, color: color, fillColor: color, fillOpacity: 0.85, weight: 1.5
-        });
+        if (!marker) {
+            marker = L.circleMarker(latlng, {
+                radius: 5, color: color, fillColor: color, fillOpacity: 0.85, weight: 1.5
+            });
+        }
+
+        // Bind MGRS popup to every point marker
+        marker.bindPopup(function() { return pointPopupContent(props, latlng); });
+        return marker;
     }
 
     function pointToLayerFn(color) {
