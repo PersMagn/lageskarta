@@ -1021,15 +1021,7 @@
     renderGeojsonList();
     fitMapToAllObjects();
 
-    // Show MGRS on any map click not consumed by a marker/layer
-    map.on('click', function(e) {
-        const mgrsStr = latLngToMGRS(e.latlng.lat, e.latlng.lng);
-        if (!mgrsStr) return;
-        L.popup({ className: 'mgrs-popup' })
-            .setLatLng(e.latlng)
-            .setContent('<span style="font-family:monospace;font-size:13px;">📍 ' + mgrsStr + '</span>')
-            .openOn(map);
-    });
+
 
 </script>
 
