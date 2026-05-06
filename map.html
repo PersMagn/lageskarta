@@ -511,7 +511,14 @@
                 const sym = new ms.Symbol(item.obs.sidc, { size: 30, uniqueDesignation: item.obs.lopnummer });
                 L.marker(displayCoords, {
                     icon: L.divIcon({ className: '', html: sym.asSVG(), iconAnchor: [sym.getAnchor().x, sym.getAnchor().y] })
-                }).bindPopup(`<b>#${item.obs.lopnummer}</b><br>${item.obs.mtrl}<br>${item.obs.info}`).addTo(mapLayers);
+                }).bindPopup(function() {
+                        const coords = actualCoords;
+                        const mgrsStr = coords ? latLngToMGRS(coords[0], coords[1]) : null;
+                        return '<b>#' + item.obs.lopnummer + '</b><br>' +
+                               (item.obs.mtrl || '') + '<br>' +
+                               (item.obs.info || '') +
+                               (mgrsStr ? '<br><span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + mgrsStr + '</span>' : '');
+                    }).addTo(mapLayers);
             });
         });
     }
@@ -694,6 +701,16 @@
         };
     }
 
+    // Convert latlng to MGRS string (5-digit precision = 1m)
+    function latLngToMGRS(lat, lng) {
+        try {
+            // mgrs.js forward([ lng, lat ], precision)
+            return mgrs.forward([lng, lat], 5);
+        } catch(e) {
+            return null;
+        }
+    }
+
     // Normalise SIDC: truncate 30-char APP-6B to 20-char APP-6D
     function normaliseSIDC(raw) {
         if (!raw) return '';
@@ -833,11 +850,16 @@
                 }
             }
 
-            // Popup for all features
-            const lines = Object.entries(props)
-                .filter(function(kv) { return kv[1] != null && kv[1] !== ''; })
-                .map(function(kv) { return '<b>' + kv[0] + ':</b> ' + kv[1]; });
-            if (lines.length) layer.bindPopup(lines.join('<br>'));
+            // Popup with properties + MGRS at click location
+            layer.on('click', function(e) {
+                const latlng = e.latlng;
+                const mgrsStr = latLngToMGRS(latlng.lat, latlng.lng);
+                const lines = Object.entries(props)
+                    .filter(function(kv) { return kv[1] != null && kv[1] !== ''; })
+                    .map(function(kv) { return '<b>' + kv[0] + ':</b> ' + kv[1]; });
+                if (mgrsStr) lines.push('<span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + mgrsStr + '</span>');
+                if (lines.length) L.popup().setLatLng(latlng).setContent(lines.join('<br>')).openOn(map);
+            });
         };
     }
 
@@ -998,6 +1020,16 @@
     loadGeojsonFromSession();
     renderGeojsonList();
     fitMapToAllObjects();
+
+    // Show MGRS on any map click not consumed by a marker/layer
+    map.on('click', function(e) {
+        const mgrsStr = latLngToMGRS(e.latlng.lat, e.latlng.lng);
+        if (!mgrsStr) return;
+        L.popup({ className: 'mgrs-popup' })
+            .setLatLng(e.latlng)
+            .setContent('<span style="font-family:monospace;font-size:13px;">📍 ' + mgrsStr + '</span>')
+            .openOn(map);
+    });
 
 </script>
 
