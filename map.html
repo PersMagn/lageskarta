@@ -513,8 +513,7 @@
                     icon: L.divIcon({ className: '', html: sym.asSVG(), iconAnchor: [sym.getAnchor().x, sym.getAnchor().y] })
                 }).bindPopup(function() {
                         const o = item.obs;
-                        const coords = actualCoords;
-                        const mgrsStr = coords ? latLngToMGRS(coords[0], coords[1]) : null;
+                        const mgrsStr = centerCoords ? latLngToMGRS(centerCoords[0], centerCoords[1]) : null;
                         const row = (label, val) => val ? '<tr><td style="color:#888;font-size:11px;padding:2px 6px 2px 0;white-space:nowrap;vertical-align:top"><b>' + label + '</b></td><td style="font-size:12px;padding:2px 0;">' + val + '</td></tr>' : '';
                         return '<div style="min-width:220px;max-width:320px;">' +
                             '<div style="font-size:14px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">' +
