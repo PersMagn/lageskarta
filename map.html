@@ -512,13 +512,30 @@
                 L.marker(displayCoords, {
                     icon: L.divIcon({ className: '', html: sym.asSVG(), iconAnchor: [sym.getAnchor().x, sym.getAnchor().y] })
                 }).bindPopup(function() {
+                        const o = item.obs;
                         const coords = actualCoords;
                         const mgrsStr = coords ? latLngToMGRS(coords[0], coords[1]) : null;
-                        return '<b>#' + item.obs.lopnummer + '</b><br>' +
-                               (item.obs.mtrl || '') + '<br>' +
-                               (item.obs.info || '') +
-                               (mgrsStr ? '<br><span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + mgrsStr + '</span>' : '');
-                    }).addTo(mapLayers);
+                        const row = (label, val) => val ? '<tr><td style="color:#888;font-size:11px;padding:2px 6px 2px 0;white-space:nowrap;vertical-align:top"><b>' + label + '</b></td><td style="font-size:12px;padding:2px 0;">' + val + '</td></tr>' : '';
+                        return '<div style="min-width:220px;max-width:320px;">' +
+                            '<div style="font-size:14px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">' +
+                                '📋 Rapport #' + o.lopnummer +
+                            '</div>' +
+                            '<table style="border-collapse:collapse;width:100%">' +
+                                row('Mtrl', o.mtrl) +
+                                row('TNR', o.tnr) +
+                                row('Från', o.från) +
+                                row('Org', o.org) +
+                                row('Info', o.info) +
+                                row('Plats', o.pos) +
+                                row('Koord', mgrsStr || o.koordinater) +
+                                row('Tillf.', o.tillförlitlighet) +
+                                row('Sakr.', o.sakriktighet) +
+                                row('Ref', o.referenser) +
+                                row('Kommentar', o.kommentar) +
+                                row('Bedömning', o.bedömning) +
+                            '</table>' +
+                        '</div>';
+                    }, { maxWidth: 340, maxHeight: 400 }).addTo(mapLayers);
             });
         });
     }
