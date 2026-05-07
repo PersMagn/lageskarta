@@ -508,7 +508,16 @@
                     displayCoords = [centerCoords[0] + radius * Math.cos(angle), centerCoords[1] + radius * Math.sin(angle)];
                     L.polyline([displayCoords, centerCoords], { color: '#ff4d4d', weight: 1.5, dashArray: '4, 6' }).addTo(mapLayers);
                 }
-                const sym = new ms.Symbol(item.obs.sidc, { size: 30, uniqueDesignation: item.obs.lopnummer });
+                // Ensure hostile affiliation (digit index 2 = '6'). Correct stored SIDCs that
+                // were generated with the old friendly-default bug ('3' -> '6').
+                const sidc = (function(s) {
+                    if (!s || s.length < 4) return s;
+                    const typ = (item.obs.typ || '').trim().toLowerCase();
+                    const isFriendly = (typ === '7e' || typ === 'egna' || typ === 'friendly' || typ === 'f');
+                    if (!isFriendly && s[2] === '3') return s.substring(0, 2) + '6' + s.substring(3);
+                    return s;
+                })(item.obs.sidc);
+                const sym = new ms.Symbol(sidc, { size: 30, uniqueDesignation: item.obs.lopnummer });
                 L.marker(displayCoords, {
                     icon: L.divIcon({ className: '', html: sym.asSVG(), iconAnchor: [sym.getAnchor().x, sym.getAnchor().y] })
                 }).bindPopup(function() {

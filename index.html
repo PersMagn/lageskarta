@@ -675,9 +675,10 @@ Format: Löpnummer	TNR	Koordinater	Plats	Informationselement	KOMMENTAR	Från	Typ
 
     // ── Affiliation detection ─────────────────────────────────────────────────
     function getAffiliation(obs) {
-        // 7S = hostile, everything else = friendly
-        if (obs.typ && obs.typ.trim().toLowerCase() === '7s') return 'H';
-        return 'F';
+        // Default hostile (enemy reports). Override to friendly only if typ indicates own forces.
+        const typ = (obs.typ || '').trim().toLowerCase();
+        if (typ === '7e' || typ === 'egna' || typ === 'friendly' || typ === 'f') return 'F';
+        return 'H'; // hostile by default
     }
 
     const AFFIL_DIGIT = { 'F': '3', 'H': '6', 'U': '4', 'N': '5' };
