@@ -89,6 +89,16 @@
         .geojson-layer-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .geojson-layer-toggle { cursor: pointer; font-size: 14px; }
         .geojson-layer-remove { cursor: pointer; color: #c00; font-size: 14px; margin-left: 2px; }
+        .geojson-layer-move { cursor: pointer; font-size: 14px; margin-left: 2px; color: #555; }
+        .geojson-layer-move.active { color: #e67e00; }
+        #move-mode-banner {
+            display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 1100; background: #e67e00; color: #fff; padding: 6px 18px;
+            border-radius: 20px; font-size: 13px; font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none;
+        }
+        #map.moving-layer { cursor: grab !important; }
+        #map.moving-layer:active { cursor: grabbing !important; }
         .geojson-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 
         .obs-item {
@@ -234,7 +244,7 @@
         <span id="mapSourceBadge" style="font-size:12px; color:#666; background:#eee; padding:4px 10px; border-radius:12px; white-space:nowrap;">🗺️ Laddar...</span>
     </div>
     <div id="map-container">
-        <div id="map"></div>
+        <div id="map"><div id="move-mode-banner">✥ Flytta lager — dra på kartan, klicka ✥ igen för att bekräfta</div></div>
         <div id="sidebar">
             <div class="sidebar-header">
                 <h3>🗺️ Kartvy</h3>
@@ -508,42 +518,17 @@
                     displayCoords = [centerCoords[0] + radius * Math.cos(angle), centerCoords[1] + radius * Math.sin(angle)];
                     L.polyline([displayCoords, centerCoords], { color: '#ff4d4d', weight: 1.5, dashArray: '4, 6' }).addTo(mapLayers);
                 }
-                // Ensure hostile affiliation (digit index 2 = '6'). Correct stored SIDCs that
-                // were generated with the old friendly-default bug ('3' -> '6').
-                const sidc = (function(s) {
-                    if (!s || s.length < 4) return s;
-                    const typ = (item.obs.typ || '').trim().toLowerCase();
-                    const isFriendly = (typ === '7e' || typ === 'egna' || typ === 'friendly' || typ === 'f');
-                    if (!isFriendly && s[2] === '3') return s.substring(0, 2) + '6' + s.substring(3);
-                    return s;
-                })(item.obs.sidc);
-                const sym = new ms.Symbol(sidc, { size: 30, uniqueDesignation: item.obs.lopnummer });
+                const sym = new ms.Symbol(item.obs.sidc, { size: 30, uniqueDesignation: item.obs.lopnummer });
                 L.marker(displayCoords, {
                     icon: L.divIcon({ className: '', html: sym.asSVG(), iconAnchor: [sym.getAnchor().x, sym.getAnchor().y] })
                 }).bindPopup(function() {
-                        const o = item.obs;
-                        const mgrsStr = centerCoords ? latLngToMGRS(centerCoords[0], centerCoords[1]) : null;
-                        const row = (label, val) => val ? '<tr><td style="color:#888;font-size:11px;padding:2px 6px 2px 0;white-space:nowrap;vertical-align:top"><b>' + label + '</b></td><td style="font-size:12px;padding:2px 0;">' + val + '</td></tr>' : '';
-                        return '<div style="min-width:220px;max-width:320px;">' +
-                            '<div style="font-size:14px;font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">' +
-                                '📋 Rapport #' + o.lopnummer +
-                            '</div>' +
-                            '<table style="border-collapse:collapse;width:100%">' +
-                                row('Mtrl', o.mtrl) +
-                                row('TNR', o.tnr) +
-                                row('Från', o.från) +
-                                row('Org', o.org) +
-                                row('Info', o.info) +
-                                row('Plats', o.pos) +
-                                row('Koord', mgrsStr || o.koordinater) +
-                                row('Tillf.', o.tillförlitlighet) +
-                                row('Sakr.', o.sakriktighet) +
-                                row('Ref', o.referenser) +
-                                row('Kommentar', o.kommentar) +
-                                row('Bedömning', o.bedömning) +
-                            '</table>' +
-                        '</div>';
-                    }, { maxWidth: 340, maxHeight: 400 }).addTo(mapLayers);
+                        const coords = actualCoords;
+                        const mgrsStr = coords ? latLngToMGRS(coords[0], coords[1]) : null;
+                        return '<b>#' + item.obs.lopnummer + '</b><br>' +
+                               (item.obs.mtrl || '') + '<br>' +
+                               (item.obs.info || '') +
+                               (mgrsStr ? '<br><span style="font-family:monospace;font-size:11px;color:#666;">📍 ' + mgrsStr + '</span>' : '');
+                    }).addTo(mapLayers);
             });
         });
     }
@@ -1003,9 +988,114 @@
                 '  onchange="changeGeojsonColor(' + item.id + ', this.value)">' +
                 '<span title="' + item.name + '">' + item.name + '</span>' +
                 '<span class="geojson-layer-toggle" onclick="toggleGeojsonLayer(' + item.id + ')" title="' + (item.visible ? 'Dölj' : 'Visa') + '">' + (item.visible ? '👁️' : '🚫') + '</span>' +
+                '<span class="geojson-layer-move' + (movingLayerId === item.id ? ' active' : '') + '" onclick="toggleMoveLayer(' + item.id + ')" title="Flytta lager">✥</span>' +
                 '<span class="geojson-layer-remove" onclick="removeGeojsonLayer(' + item.id + ')" title="Ta bort">✕</span>' +
                 '</div>';
         }).join('');
+    }
+
+    // ── Layer move mode ───────────────────────────────────────────────────────
+    let movingLayerId = null;
+    let moveDragStart = null; // { latlng, data snapshot }
+
+    function toggleMoveLayer(id) {
+        if (movingLayerId === id) {
+            // Confirm — exit move mode
+            exitMoveMode();
+        } else {
+            if (movingLayerId !== null) exitMoveMode();
+            movingLayerId = id;
+            document.getElementById('map').classList.add('moving-layer');
+            document.getElementById('move-mode-banner').style.display = 'block';
+            map.dragging.disable();
+            renderGeojsonList();
+
+            // Mousedown = start drag
+            map.on('mousedown', onMoveMouseDown);
+        }
+    }
+
+    function exitMoveMode() {
+        movingLayerId = null;
+        moveDragStart = null;
+        document.getElementById('map').classList.remove('moving-layer');
+        document.getElementById('move-mode-banner').style.display = 'none';
+        map.dragging.enable();
+        map.off('mousedown', onMoveMouseDown);
+        map.off('mousemove', onMoveMouseMove);
+        map.off('mouseup',   onMoveMouseUp);
+        renderGeojsonList();
+        saveGeojsonToSession();
+    }
+
+    function onMoveMouseDown(e) {
+        const item = geojsonLayers.find(function(l) { return l.id === movingLayerId; });
+        if (!item) return;
+        moveDragStart = { latlng: e.latlng, data: JSON.parse(JSON.stringify(item.data)) };
+        map.on('mousemove', onMoveMouseMove);
+        map.on('mouseup',   onMoveMouseUp);
+    }
+
+    function onMoveMouseMove(e) {
+        if (!moveDragStart) return;
+        const item = geojsonLayers.find(function(l) { return l.id === movingLayerId; });
+        if (!item) return;
+        const dLat = e.latlng.lat - moveDragStart.latlng.lat;
+        const dLng = e.latlng.lng - moveDragStart.latlng.lng;
+        // Apply offset from the *original* snapshot so deltas don't accumulate
+        item.data = translateGeoJSON(moveDragStart.data, dLat, dLng);
+        rebuildLayer(item);
+    }
+
+    function onMoveMouseUp(e) {
+        map.off('mousemove', onMoveMouseMove);
+        map.off('mouseup',   onMoveMouseUp);
+        if (moveDragStart) {
+            const item = geojsonLayers.find(function(l) { return l.id === movingLayerId; });
+            if (item) {
+                const dLat = e.latlng.lat - moveDragStart.latlng.lat;
+                const dLng = e.latlng.lng - moveDragStart.latlng.lng;
+                item.data = translateGeoJSON(moveDragStart.data, dLat, dLng);
+                moveDragStart.data = JSON.parse(JSON.stringify(item.data));
+                moveDragStart.latlng = e.latlng;
+                rebuildLayer(item);
+            }
+        }
+    }
+
+    function translateCoord(coord, dLat, dLng) {
+        // coord is [lng, lat] in GeoJSON
+        return [coord[0] + dLng, coord[1] + dLat];
+    }
+
+    function translateCoords(coords, dLat, dLng) {
+        if (!Array.isArray(coords)) return coords;
+        if (typeof coords[0] === 'number') return translateCoord(coords, dLat, dLng);
+        return coords.map(function(c) { return translateCoords(c, dLat, dLng); });
+    }
+
+    function translateGeoJSON(data, dLat, dLng) {
+        const copy = JSON.parse(JSON.stringify(data));
+        const features = copy.features || (copy.type === 'Feature' ? [copy] : []);
+        features.forEach(function(f) {
+            if (f.geometry && f.geometry.coordinates) {
+                f.geometry.coordinates = translateCoords(f.geometry.coordinates, dLat, dLng);
+            }
+        });
+        return copy;
+    }
+
+    function rebuildLayer(item) {
+        map.removeLayer(item.layer);
+        const group = L.layerGroup();
+        const geojsonLayer = L.geoJSON(item.data, {
+            style: function(f) { return styleForGeojson(f, item.color); },
+            pointToLayer: pointToLayerFn(item.color),
+            onEachFeature: onEachFeatureFnWithMultiPoint(item.color, group)
+        });
+        group.addLayer(geojsonLayer);
+        if (item.visible) group.addTo(map);
+        item.layer = group;
     }
 
     function changeGeojsonColor(id, newColor) {
